@@ -111,7 +111,7 @@ public class HelloWorldAM {
         LogManager.shutdown();
         System.exit(2);
       }
-    } catch (ParseException|YarnException|IOException e) {
+    } catch (ParseException|YarnException|IOException|NumberFormatException e) {
       LOG.error("Exception running Application Master", e);
       LogManager.shutdown();
       System.exit(1);
