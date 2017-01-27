@@ -35,11 +35,11 @@ import static org.junit.Assert.*;
 /**
  * Unit test that tests the class with mock AM and NM communication.
  */
-public class HelloWorldTest {
+public class HelloWorldAMTest {
 
   @Test
   public void testHelloWorldInit() throws Exception {
-    HelloWorld helloWorld = new HelloWorld();
+    HelloWorldAM helloWorld = new HelloWorldAM();
 
     String[] empty = {};
     helloWorld.init(empty);
@@ -47,32 +47,56 @@ public class HelloWorldTest {
 
   @Test
   public void testHelloWorldParams() throws Exception {
-    HelloWorld helloWorld = new HelloWorld();
+    HelloWorldAM helloWorldAM = new HelloWorldAM();
 
     String[] params = {"-runtime", "30", "-memory", "1025", "-vcores", "3",
         "-containers", "2", "-priority", "5"};
-    helloWorld.init(params);
-    assertEquals(30, helloWorld.runtime);
-    assertEquals(1025, helloWorld.containerMemory);
-    assertEquals(3, helloWorld.containerVirtualCores);
-    assertEquals(2, helloWorld.numTotalContainers);
-    assertEquals(5, helloWorld.requestPriority);
+    helloWorldAM.init(params);
+    assertEquals(30, helloWorldAM.containerTimeToLive);
+    assertEquals(1025, helloWorldAM.containerMemoryMB);
+    assertEquals(3, helloWorldAM.virtualCoreCountPerContainer);
+    assertEquals(2, helloWorldAM.numTotalContainers);
+    assertEquals(5, helloWorldAM.requestPriority);
   }
 
   @Test
   public void testHelloWorldRun() throws Exception {
-    HelloWorld helloWorld = new HelloWorld();
+    HelloWorldAM helloWorldAM = new HelloWorldAM();
 
     String[] empty = {};
-    helloWorld.init(empty);
+    helloWorldAM.init(empty);
 
-    setupSingleContainerRun(helloWorld, 0);
+    setupSingleContainerRun(helloWorldAM, 0);
 
-    helloWorld.run();
-    assertTrue(helloWorld.finish());
+    helloWorldAM.run();
+    assertTrue(helloWorldAM.finish());
+    assertTrue(helloWorldAM.serverSocket.isClosed());
+    assertTrue(!helloWorldAM.amServer.isAlive());
+    assertTrue(helloWorldAM.numFailedContainers == 0);
+    assertTrue(helloWorldAM.containerTokens.capacity() > 0);
+    assertTrue(helloWorldAM.completedContainers.size() == 1);
   }
 
-  private void setupSingleContainerRun(HelloWorld helloWorld, int status)
+  @Test
+  public void testHelloWorldRunFail() throws Exception {
+    HelloWorldAM helloWorldAM = new HelloWorldAM();
+
+    String[] empty = {};
+    helloWorldAM.init(empty);
+
+    setupSingleContainerRun(helloWorldAM, 1);
+    helloWorldAM.nmClient = mock(NMClient.class);
+
+    helloWorldAM.run();
+    assertFalse(helloWorldAM.finish());
+    assertTrue(helloWorldAM.serverSocket.isClosed());
+    assertTrue(!helloWorldAM.amServer.isAlive());
+    assertTrue(helloWorldAM.numFailedContainers == 1);
+    assertTrue(helloWorldAM.containerTokens.capacity() > 0);
+    assertTrue(helloWorldAM.completedContainers.size() == 1);
+  }
+
+  private void setupSingleContainerRun(HelloWorldAM helloWorld, int status)
       throws YarnException, IOException {
     Resource maxResource = mock(Resource.class);
     when(maxResource.getMemorySize()).thenReturn(8192L);
@@ -112,19 +136,5 @@ public class HelloWorldTest {
         thenReturn(mockAllocateResponseCompleted);
 
     helloWorld.nmClient = mock(NMClient.class);
-  }
-
-  @Test
-  public void testHelloWorldRunFail() throws Exception {
-    HelloWorld helloWorld = new HelloWorld();
-
-    String[] empty = {};
-    helloWorld.init(empty);
-
-    setupSingleContainerRun(helloWorld, 1);
-    helloWorld.nmClient = mock(NMClient.class);
-
-    helloWorld.run();
-    assertFalse(helloWorld.finish());
   }
 }

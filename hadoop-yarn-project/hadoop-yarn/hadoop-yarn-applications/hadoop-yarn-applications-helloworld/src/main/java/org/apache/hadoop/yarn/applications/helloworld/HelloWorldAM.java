@@ -19,6 +19,7 @@
 package org.apache.hadoop.yarn.applications.helloworld;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
 import org.apache.commons.cli.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -28,12 +29,10 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.yarn.api.protocolrecords.AllocateResponse;
-import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse;
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.AMRMClient;
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest;
 import org.apache.hadoop.yarn.client.api.NMClient;
-import org.apache.hadoop.yarn.client.api.impl.NMClientImpl;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
@@ -45,6 +44,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -53,64 +53,77 @@ import java.util.*;
  * It should help to demonstrate Yarn applications.
  * There is no client provided. Launch this application using the REST API.
  */
-public class HelloWorld {
+public class HelloWorldAM {
 
   // Logger object
-  static final Log LOG = LogFactory.getLog(HelloWorld.class);
+  private static final Log LOG = LogFactory.getLog(HelloWorldAM.class);
   // Configuration
-  Configuration conf = new YarnConfiguration();
+  private Configuration conf = new YarnConfiguration();
   // Handles Resource Manager communication
+  @VisibleForTesting
   AMRMClient amRMClient;
   // Handles Node Manager communication
+  @VisibleForTesting
   NMClient nmClient;
-  // Client RPC or REST API server
+  // Tracking server for the application master
+  @VisibleForTesting
   ServerSocket serverSocket;
   // Server thread that responds to clients
+  @VisibleForTesting
   Thread amServer;
   // Configured number of seconds that each container runs for
-  int runtime = 1;
+  @VisibleForTesting
+  int containerTimeToLive = 1;
   // Configured number of containers to launch
+  @VisibleForTesting
   int numTotalContainers = 1;
-  // Configured memory of each container in megabytes
-  int containerMemory = 10;
+  // Configured memory of each container
+  @VisibleForTesting
+  int containerMemoryMB = 10;
   // Configured number of virtual cores per container
-  int containerVirtualCores = 1;
+  @VisibleForTesting
+  int virtualCoreCountPerContainer = 1;
   // Configured priority of each container request
+  @VisibleForTesting
   int requestPriority;
   // Count of failed containers
+  @VisibleForTesting
   int numFailedContainers = 0;
   // Security tokens to pass to containers
+  @VisibleForTesting
   ByteBuffer containerTokens;
   // Set of completed containers
-  Set<ContainerId> completedContainers = new HashSet<ContainerId>();
+  @VisibleForTesting
+  Set<ContainerId> completedContainers = Sets.newHashSet();
 
   /**
-   * main method.
+   * Starting a Hello World application master.
    * @param args input arguments
    */
   public static void main(String[] args) {
-    LOG.info("Starting ApplicationMaster");
-    boolean result = false;
+    LOG.info("Starting Application Master");
     try {
-      HelloWorld appMaster = new HelloWorld();
+      HelloWorldAM appMaster = new HelloWorldAM();
       appMaster.init(args);
       appMaster.run();
-      result = appMaster.finish();
-    } catch (Throwable t) {
-      LOG.error("Exception running Application Master", t);
-      System.exit(1);
-    } finally {
+      if (!appMaster.finish()) {
+        LOG.error("Application Master failed");
+        LogManager.shutdown();
+        System.exit(2);
+      }
+    } catch (ParseException|YarnException|IOException e) {
+      LOG.error("Exception running Application Master", e);
       LogManager.shutdown();
+      System.exit(1);
     }
-    int exitCode = result ? 0 : 2;
-    LOG.info(String.format("Application Master exiting with %d", exitCode));
-    System.exit(exitCode);
+    LOG.info("Application Master succeeded");
+    LogManager.shutdown();
   }
 
   /**
    * Default constructor.
    */
-  HelloWorld() {
+  HelloWorldAM() {
   }
 
   /**
@@ -120,7 +133,7 @@ public class HelloWorld {
    * @throws ParseException input could not be parsed
    */
   @VisibleForTesting
-  void init(String[] args) throws ParseException {
+  void init(String[] args) throws ParseException, NumberFormatException {
     LOG.info("Parsing arguments");
     Options opts = new Options();
     opts.addOption("containers", true,
@@ -149,13 +162,13 @@ public class HelloWorld {
     LOG.info(String.format("Arguments: %s", arguments));
     numTotalContainers = Math.max(0,
         Integer.parseInt(cliParser.getOptionValue("containers", "1")));
-    runtime = Math.max(0,
+    containerTimeToLive = Math.max(0,
         Integer.parseInt(cliParser.getOptionValue("runtime", "1")));
     requestPriority =
         Integer.parseInt(cliParser.getOptionValue("priority", "0"));
-    containerMemory =
+    containerMemoryMB =
         Integer.parseInt(cliParser.getOptionValue("memory", "10"));
-    containerVirtualCores =
+    virtualCoreCountPerContainer =
         Integer.parseInt(cliParser.getOptionValue("vcores", "1"));
   }
 
@@ -167,70 +180,20 @@ public class HelloWorld {
    */
   @SuppressWarnings("unchecked")
   void run() throws YarnException, IOException {
-    LOG.info("Create client to Resource Manager to allocate containers");
-    if (amRMClient == null) {
-      amRMClient = AMRMClient.createAMRMClient();
-    }
-    amRMClient.init(conf);
-    amRMClient.start();
-
-    LOG.info("Create client to Node Manager to start containers");
-    if (nmClient == null) {
-      nmClient = NMClient.createNMClient();
-    }
-    nmClient.init(conf);
-    nmClient.start();
-
-    LOG.info("Collect Resource Manager tokens to pass to containers");
+    ensureAMRMClient();
+    ensureNMClient();
     collectContainerTokens();
+    registerWithRM();
+    requestContainers();
+    runContainers();
+  }
 
-    serverSocket = new ServerSocket(0);
-    final int serverPort = serverSocket.getLocalPort();
-    final String serverName = InetAddress.getLocalHost().getHostAddress();
-    final String serverUrl =
-        String.format("http://%s:%d", serverName, serverPort);
-    LOG.info(String.format("Launching tracking url %s", serverUrl));
-    amServer = new Thread(new Runnable() {
-      public void run() {
-        while (!serverSocket.isClosed()) {
-          try {
-            Socket clientSocket = serverSocket.accept();
-            ByteBuffer response = Charset.forName("ASCII").encode(
-                "HTTP/1.1 200 ok\r\n" +
-                    "Content-Type: text/plain\r\n" +
-                    "Content-Length: 12\r\n" +
-                    "\r\n" +
-                    "Hello world!");
-            clientSocket.getOutputStream().write(response.array());
-            clientSocket.getOutputStream().flush();
-            clientSocket.close();
-          } catch (IOException ex) {
-            // Avoiding flooding the logs with debug info
-          }
-        }
-      }
-    });
-    amServer.start();
-
-    LOG.info("Register with ResourceManager");
-    amRMClient
-        .registerApplicationMaster(
-            serverName,
-            serverPort,
-            serverUrl);
-
-    LOG.info(
-        String.format("Request %d containers from RM", numTotalContainers));
-    for (int i = 0; i < numTotalContainers; ++i) {
-      ContainerRequest containerAsk =
-          new ContainerRequest(
-              Resource.newInstance(containerMemory, containerVirtualCores),
-              null,
-              null,
-              Priority.newInstance(requestPriority));
-      amRMClient.addContainerRequest(containerAsk);
-    }
-
+  /**
+   * Starting AM heart beat loop until all containers completed.
+   * @throws YarnException allocation or start failed
+   * @throws IOException AM or NM connection closed
+   */
+  private void runContainers() throws YarnException, IOException {
     float progress = 0.0f;
     LOG.info("Starting AM heart beat loop until all containers completed");
     while (completedContainers.size() < numTotalContainers &&
@@ -242,7 +205,8 @@ public class HelloWorld {
         ContainerLaunchContext clc = ContainerLaunchContext.newInstance(
             null,
             null,
-            Collections.singletonList(String.format("sleep %d", runtime)),
+            Collections.singletonList(String.format("sleep %d",
+                containerTimeToLive)),
             null,
             containerTokens.duplicate(),
             null
@@ -270,6 +234,92 @@ public class HelloWorld {
     LOG.info("Finished heart beat loop");
   }
 
+  /**
+   * Create client to Node Manager to start containers.
+   */
+  private void ensureNMClient() {
+    LOG.info("Create client to Node Manager to start containers");
+    if (nmClient == null) {
+      nmClient = NMClient.createNMClient();
+    }
+    nmClient.init(conf);
+    nmClient.start();
+  }
+
+  /**
+   * Create client to Resource Manager to allocate containers.
+   */
+  private void ensureAMRMClient() {
+    LOG.info("Create client to Resource Manager to allocate containers");
+    if (amRMClient == null) {
+      amRMClient = AMRMClient.createAMRMClient();
+    }
+    amRMClient.init(conf);
+    amRMClient.start();
+  }
+
+  /**
+   * Remove AMRM token from container token list.
+   * @throws IOException could not write to token storage
+   */
+  private void collectContainerTokens() throws IOException {
+    LOG.info("Collect Resource Manager tokens to pass to containers");
+    Credentials cred = UserGroupInformation.getCurrentUser().getCredentials();
+    DataOutputBuffer dob = new DataOutputBuffer();
+    cred.writeTokenStorageToStream(dob);
+    // Now remove the AM->RM token so that containers cannot access it.
+    Iterator<Token<?>> iter = cred.getAllTokens().iterator();
+    while (iter.hasNext()) {
+      Token<?> token = iter.next();
+      LOG.info(token);
+      if (token.getKind().equals(AMRMTokenIdentifier.KIND_NAME)) {
+        iter.remove();
+      }
+    }
+    containerTokens = ByteBuffer.wrap(dob.getData(), 0, dob.getLength());
+  }
+
+  /**
+   * Request containers.
+   */
+  @SuppressWarnings("unchecked")
+  private void requestContainers() {
+    LOG.info(
+        String.format("Request %d containers from RM", numTotalContainers));
+    for (int i = 0; i < numTotalContainers; ++i) {
+      ContainerRequest containerAsk =
+          new ContainerRequest(
+              Resource.newInstance(
+                  containerMemoryMB, virtualCoreCountPerContainer),
+              null,
+              null,
+              Priority.newInstance(requestPriority));
+      amRMClient.addContainerRequest(containerAsk);
+    }
+  }
+
+  /**
+   * Register with resource manager.
+   * @throws IOException network error
+   * @throws YarnException registration failed
+   */
+  private void registerWithRM() throws IOException, YarnException {
+    serverSocket = new ServerSocket(0);
+    final int serverPort = serverSocket.getLocalPort();
+    final String serverName = InetAddress.getLocalHost().getHostAddress();
+    final String serverUrl =
+        String.format("http://%s:%d", serverName, serverPort);
+    LOG.info(String.format("Launching tracking url %s", serverUrl));
+    amServer = new Thread(new TrackingURLServer());
+    amServer.start();
+
+    LOG.info("Register with ResourceManager");
+    amRMClient
+        .registerApplicationMaster(
+            serverName,
+            serverPort,
+            serverUrl);
+  }
   /**
    * Yarn specific application master cleanup code.
    * @return application status
@@ -312,23 +362,23 @@ public class HelloWorld {
     return appStatus == FinalApplicationStatus.SUCCEEDED;
   }
 
-  /**
-   * Remove AMRM token from container token list.
-   * @throws IOException could not write to token storage
-   */
-  private void collectContainerTokens() throws IOException {
-    Credentials cred = UserGroupInformation.getCurrentUser().getCredentials();
-    DataOutputBuffer dob = new DataOutputBuffer();
-    cred.writeTokenStorageToStream(dob);
-    // Now remove the AM->RM token so that containers cannot access it.
-    Iterator<Token<?>> iter = cred.getAllTokens().iterator();
-    while (iter.hasNext()) {
-      Token<?> token = iter.next();
-      LOG.info(token);
-      if (token.getKind().equals(AMRMTokenIdentifier.KIND_NAME)) {
-        iter.remove();
+  class TrackingURLServer implements Runnable {
+    public void run() {
+      while (!serverSocket.isClosed()) {
+        try {
+          Socket clientSocket = serverSocket.accept();
+          ByteBuffer response = StandardCharsets.US_ASCII.encode(
+              "HTTP/1.1 200 ok\r\n" +
+                  "Content-Type: text/plain\r\n" +
+                  "Content-Length: 12\r\n" +
+                  "\r\n" +
+                  "Hello world!");
+          clientSocket.getOutputStream().write(response.array());
+          clientSocket.getOutputStream().flush();
+          clientSocket.close();
+        } catch (IOException ignored) {
+        }
       }
     }
-    containerTokens = ByteBuffer.wrap(dob.getData(), 0, dob.getLength());
   }
 }
