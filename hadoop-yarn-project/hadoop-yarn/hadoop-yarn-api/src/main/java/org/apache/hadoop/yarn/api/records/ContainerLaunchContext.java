@@ -26,6 +26,7 @@ import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Stable;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
+import org.apache.hadoop.yarn.proto.YarnProtos;
 import org.apache.hadoop.yarn.server.api.ApplicationInitializationContext;
 import org.apache.hadoop.yarn.server.api.AuxiliaryService;
 import org.apache.hadoop.yarn.util.Records;
@@ -244,4 +245,22 @@ public abstract class ContainerLaunchContext {
   @Unstable
   public abstract void setContainerRetryContext(
       ContainerRetryContext containerRetryContext);
+
+  /**
+   * Get <em>configuration entries</em> for the container.
+   * @return <em>configuration entries</em> for the container
+   */
+  @Public
+  @Stable
+  public abstract Map<YarnProtos.ContainerConfigurationProto, String> getConfiguration();
+
+  /**
+   * Add <em>configuration entries</em> for the container. All pre-existing Map
+   * entries are cleared before adding the new Map
+   * @param configuration <em>configuration entries</em> for the container
+   */
+  @Public
+  @Stable
+  public abstract void setConfiguration(
+      Map<YarnProtos.ContainerConfigurationProto, String> configuration);
 }

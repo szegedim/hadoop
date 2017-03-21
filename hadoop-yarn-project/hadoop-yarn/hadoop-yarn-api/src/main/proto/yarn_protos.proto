@@ -549,7 +549,7 @@ message ContainerLaunchContextProto {
   repeated ApplicationACLMapProto application_ACLs = 6;
   optional ContainerRetryContextProto container_retry_context = 7;
   optional bytes tokens_conf = 8;
-
+  repeated ContainerConfigurationStringMapProto configuration = 9;
 }
 
 message ContainerStatusProto {
@@ -582,6 +582,11 @@ enum ContainerRetryPolicyProto {
   RETRY_ON_SPECIFIC_ERROR_CODES = 2;
 }
 
+enum ContainerConfigurationProto {
+  DEFAULT = 0;
+  DEBUG_DELETE_DELAY = 1;
+}
+
 ////////////////////////////////////////////////////////////////////////
 ////// From common//////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -599,3 +604,9 @@ message StringBytesMapProto {
   optional string key = 1;
   optional bytes value = 2;
 }
+
+message ContainerConfigurationStringMapProto {
+  optional ContainerConfigurationProto key = 1;
+  optional string value = 2;
+}
+

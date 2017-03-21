@@ -31,6 +31,7 @@ import org.apache.hadoop.yarn.api.records.ApplicationAccessType;
 import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
 import org.apache.hadoop.yarn.api.records.ContainerRetryContext;
 import org.apache.hadoop.yarn.api.records.LocalResource;
+import org.apache.hadoop.yarn.proto.YarnProtos;
 import org.apache.hadoop.yarn.proto.YarnProtos.ApplicationACLMapProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.ContainerLaunchContextProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.ContainerLaunchContextProtoOrBuilder;
@@ -60,6 +61,8 @@ extends ContainerLaunchContext {
   private List<String> commands = null;
   private Map<ApplicationAccessType, String> applicationACLS = null;
   private ContainerRetryContext containerRetryContext = null;
+  private Map<YarnProtos.ContainerConfigurationProto, String> configuration
+      = null;
 
   public ContainerLaunchContextPBImpl() {
     builder = ContainerLaunchContextProto.newBuilder();
@@ -130,6 +133,9 @@ extends ContainerLaunchContext {
     if (this.containerRetryContext != null) {
       builder.setContainerRetryContext(
           convertToProtoFormat(this.containerRetryContext));
+    }
+    if (this.configuration != null) {
+      addConfigToProto();
     }
   }
   
@@ -516,6 +522,83 @@ extends ContainerLaunchContext {
     this.containerRetryContext = retryContext;
   }
 
+  @Override
+  public Map<YarnProtos.ContainerConfigurationProto, String> getConfiguration(
+  ) {
+    initConfiguration();
+    return this.configuration;
+  }
+
+  private void initConfiguration() {
+    if (this.configuration != null) {
+      return;
+    }
+    ContainerLaunchContextProtoOrBuilder p = viaProto ? proto : builder;
+    List<YarnProtos.ContainerConfigurationStringMapProto> list =
+        p.getConfigurationList();
+    this.configuration =
+        new HashMap<YarnProtos.ContainerConfigurationProto, String>();
+
+    for (YarnProtos.ContainerConfigurationStringMapProto c : list) {
+      this.configuration.put(c.getKey(), c.getValue());
+    }
+  }
+
+  @Override
+  public void setConfiguration(
+      Map<YarnProtos.ContainerConfigurationProto, String> configuration) {
+    if (configuration == null)
+      return;
+    initEnv();
+    this.configuration.clear();
+    this.configuration.putAll(configuration);
+  }
+
+  private void addConfigToProto() {
+    maybeInitBuilder();
+    builder.clearConfiguration();
+    if (configuration == null)
+      return;
+    Iterable<YarnProtos.ContainerConfigurationStringMapProto> iterable =
+        new Iterable<YarnProtos.ContainerConfigurationStringMapProto>() {
+
+          @Override
+          public Iterator<YarnProtos.ContainerConfigurationStringMapProto>
+          iterator() {
+            return
+                new Iterator<YarnProtos.ContainerConfigurationStringMapProto>()
+                {
+
+              Iterator<YarnProtos.ContainerConfigurationProto> keyIter =
+                  configuration.keySet().iterator();
+
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
+
+              @Override
+              public YarnProtos.ContainerConfigurationStringMapProto next() {
+                YarnProtos.ContainerConfigurationProto key = keyIter.next();
+                String value = configuration.get(key);
+
+                if (value == null) {
+                  value = "";
+                }
+
+                return YarnProtos.ContainerConfigurationStringMapProto.newBuilder().setKey(key)
+                    .setValue((value)).build();
+              }
+
+              @Override
+              public boolean hasNext() {
+                return keyIter.hasNext();
+              }
+            };
+          }
+        };
+    builder.addAllConfiguration(iterable);
+  }
   private LocalResourcePBImpl convertFromProtoFormat(LocalResourceProto p) {
     return new LocalResourcePBImpl(p);
   }
