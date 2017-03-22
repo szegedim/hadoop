@@ -60,15 +60,15 @@ public class ContainerLaunchContextInfo {
 
   @XmlElement(name = "configuration")
   private
-  Map<String, String> configuration;
+  HashMap<String, String> configuration;
 
   public ContainerLaunchContextInfo() {
-    local_resources = new HashMap<String, LocalResourceInfo>();
-    environment = new HashMap<String, String>();
-    commands = new ArrayList<String>();
-    servicedata = new HashMap<String, String>();
+    local_resources = new HashMap<>();
+    environment = new HashMap<>();
+    commands = new ArrayList<>();
+    servicedata = new HashMap<>();
     credentials = new CredentialsInfo();
-    acls = new HashMap<ApplicationAccessType, String>();
+    acls = new HashMap<>();
     configuration = new HashMap<>();
   }
 
@@ -124,7 +124,7 @@ public class ContainerLaunchContextInfo {
     return configuration;
   }
 
-  public void setConfiguration(Map<String, String> configuration) {
+  public void setConfiguration(HashMap<String, String> configuration) {
     this.configuration = configuration;
   }
 }
