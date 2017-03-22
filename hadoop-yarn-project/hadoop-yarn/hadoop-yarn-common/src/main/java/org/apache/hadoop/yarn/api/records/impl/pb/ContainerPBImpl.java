@@ -28,6 +28,7 @@ import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.api.records.Token;
+import org.apache.hadoop.yarn.proto.YarnProtos;
 import org.apache.hadoop.yarn.proto.YarnProtos.ContainerIdProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.ContainerProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.ContainerProtoOrBuilder;
@@ -35,6 +36,11 @@ import org.apache.hadoop.yarn.proto.YarnProtos.NodeIdProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.PriorityProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.ResourceProto;
 import org.apache.hadoop.yarn.proto.YarnProtos.ExecutionTypeProto;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 @Private
 @Unstable
@@ -49,6 +55,8 @@ public class ContainerPBImpl extends Container {
   private Resource resource = null;
   private Priority priority = null;
   private Token containerToken = null;
+  private Map<YarnProtos.ContainerConfigurationProto, String> configuration =
+      null;
 
   public ContainerPBImpl() {
     builder = ContainerProto.newBuilder();
@@ -107,6 +115,9 @@ public class ContainerPBImpl extends Container {
         && !((TokenPBImpl) this.containerToken).getProto().equals(
             builder.getContainerToken())) {
       builder.setContainerToken(convertToProtoFormat(this.containerToken));
+    }
+    if (this.configuration != null) {
+      setConfiguration(configuration);
     }
   }
 
@@ -286,6 +297,66 @@ public class ContainerPBImpl extends Container {
     builder.setVersion(version);
   }
 
+  @Override
+  public Map<YarnProtos.ContainerConfigurationProto, String>
+  getConfiguration() {
+    initConfiguration();
+    return configuration;
+  }
+
+  private void initConfiguration() {
+    if (this.configuration != null) {
+      return;
+    }
+    ContainerProtoOrBuilder p = viaProto ? proto : builder;
+    List<YarnProtos.ContainerConfigurationStringMapProto> list =
+        p.getConfigurationList();
+    this.configuration =
+        new HashMap<YarnProtos.ContainerConfigurationProto, String>();
+
+    for (YarnProtos.ContainerConfigurationStringMapProto c : list) {
+      this.configuration.put(c.getKey(), c.getValue());
+    }
+  }
+
+  @Override
+  public void setConfiguration(
+      Map<YarnProtos.ContainerConfigurationProto, String> configuration) {
+    maybeInitBuilder();
+    builder.clearConfiguration();
+    builder.addAllConfiguration(
+        new Iterable<YarnProtos.ContainerConfigurationStringMapProto>() {
+      @Override
+      public Iterator<YarnProtos.ContainerConfigurationStringMapProto>
+      iterator() {
+        return new Iterator<YarnProtos.ContainerConfigurationStringMapProto>() {
+          Iterator<YarnProtos.ContainerConfigurationProto> keyIterator =
+              configuration.keySet().iterator();
+
+          @Override
+          public boolean hasNext() {
+            return keyIterator.hasNext();
+          }
+
+          @Override
+          public YarnProtos.ContainerConfigurationStringMapProto next() {
+            YarnProtos.ContainerConfigurationProto key = keyIterator.next();
+            String value = configuration.get(key);
+
+            if (value == null) {
+              value = "";
+            }
+
+            return YarnProtos.ContainerConfigurationStringMapProto
+                .newBuilder()
+                .setKey(key)
+                .setValue((value)).build();
+          }
+        };
+      }
+    });
+  }
+
   private ContainerIdPBImpl convertFromProtoFormat(ContainerIdProto p) {
     return new ContainerIdPBImpl(p);
   }
@@ -365,4 +436,4 @@ public class ContainerPBImpl extends Container {
       return this.getId().compareTo(other.getId());
     }
   }
-}  
+}

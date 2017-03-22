@@ -58,6 +58,10 @@ public class ContainerLaunchContextInfo {
   @XmlElementWrapper(name = "application-acls")
   HashMap<ApplicationAccessType, String> acls;
 
+  @XmlElement(name = "configuration")
+  private
+  Map<String, String> configuration;
+
   public ContainerLaunchContextInfo() {
     local_resources = new HashMap<String, LocalResourceInfo>();
     environment = new HashMap<String, String>();
@@ -65,6 +69,7 @@ public class ContainerLaunchContextInfo {
     servicedata = new HashMap<String, String>();
     credentials = new CredentialsInfo();
     acls = new HashMap<ApplicationAccessType, String>();
+    configuration = new HashMap<>();
   }
 
   public Map<String, LocalResourceInfo> getResources() {
@@ -113,5 +118,13 @@ public class ContainerLaunchContextInfo {
 
   public void setAcls(HashMap<ApplicationAccessType, String> acls) {
     this.acls = acls;
+  }
+
+  public Map<String, String> getConfiguration() {
+    return configuration;
+  }
+
+  public void setConfiguration(Map<String, String> configuration) {
+    this.configuration = configuration;
   }
 }

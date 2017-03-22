@@ -549,7 +549,7 @@ extends ContainerLaunchContext {
       Map<YarnProtos.ContainerConfigurationProto, String> configuration) {
     if (configuration == null)
       return;
-    initEnv();
+    initConfiguration();
     this.configuration.clear();
     this.configuration.putAll(configuration);
   }
@@ -586,7 +586,9 @@ extends ContainerLaunchContext {
                   value = "";
                 }
 
-                return YarnProtos.ContainerConfigurationStringMapProto.newBuilder().setKey(key)
+                return YarnProtos.ContainerConfigurationStringMapProto
+                    .newBuilder()
+                    .setKey(key)
                     .setValue((value)).build();
               }
 

@@ -95,6 +95,7 @@ message ContainerProto {
   optional ExecutionTypeProto execution_type = 7 [default = GUARANTEED];
   optional int64 allocation_request_id = 8 [default = -1];
   optional int32 version = 9 [default = 0];
+  repeated ContainerConfigurationStringMapProto configuration = 10;
 }
 
 message ContainerReportProto {
@@ -584,7 +585,8 @@ enum ContainerRetryPolicyProto {
 
 enum ContainerConfigurationProto {
   DEFAULT = 0;
-  DEBUG_DELETE_DELAY = 1;
+  YARN_CONTAINER_RUNTIME_TYPE = 1;
+  YARN_AM_RUNTIME_TYPE = 2;
 }
 
 ////////////////////////////////////////////////////////////////////////

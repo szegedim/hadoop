@@ -126,6 +126,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 import org.apache.hadoop.yarn.factories.RecordFactory;
 import org.apache.hadoop.yarn.factory.providers.RecordFactoryProvider;
+import org.apache.hadoop.yarn.proto.YarnProtos;
 import org.apache.hadoop.yarn.security.client.RMDelegationTokenIdentifier;
 import org.apache.hadoop.yarn.server.resourcemanager.RMAuditLogger;
 import org.apache.hadoop.yarn.server.resourcemanager.RMAuditLogger.AuditConstants;
@@ -1741,6 +1742,28 @@ public class RMWebServices extends WebServices {
           .getContainerLaunchContextInfo().getEnvironment(), newApp
           .getContainerLaunchContextInfo().getCommands(), hmap, tokens, newApp
           .getContainerLaunchContextInfo().getAcls());
+
+    if (!newApp
+        .getContainerLaunchContextInfo().getConfiguration().isEmpty()) {
+      // Add container configuration entries
+      Map<YarnProtos.ContainerConfigurationProto, String> configuration =
+          new HashMap<>();
+      for (Entry<String, String> configurationEntry : newApp
+          .getContainerLaunchContextInfo().getConfiguration().entrySet()) {
+        if (configurationEntry.getKey() != null) {
+          try {
+            configuration.put(YarnProtos.ContainerConfigurationProto.valueOf(
+                configurationEntry.getKey()), configurationEntry.getValue());
+          } catch (IllegalArgumentException e) {
+            String message = "Unknown configuration name " +
+                configurationEntry.getKey();
+            LOG.error(message);
+            throw new BadRequestException(message);
+          }
+        }
+      }
+      ctx.setConfiguration(configuration);
+    }
 
     return ctx;
   }

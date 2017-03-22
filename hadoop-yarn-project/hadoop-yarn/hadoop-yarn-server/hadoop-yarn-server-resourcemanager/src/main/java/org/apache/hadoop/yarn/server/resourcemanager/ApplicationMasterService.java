@@ -22,11 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -80,6 +76,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.factories.RecordFactory;
 import org.apache.hadoop.yarn.factory.providers.RecordFactoryProvider;
 import org.apache.hadoop.yarn.ipc.YarnRPC;
+import org.apache.hadoop.yarn.proto.YarnProtos;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
 import org.apache.hadoop.yarn.server.resourcemanager.RMAuditLogger.AuditConstants;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMApp;
@@ -581,6 +578,16 @@ public class ApplicationMasterService extends AbstractService implements
           this.rScheduler.allocate(appAttemptId, ask, release,
               blacklistAdditions, blacklistRemovals,
               containerUpdateRequests);
+    }
+
+    // child containers may inherit the AM configuration
+    for (Container container: allocation.getContainers()) {
+      Map<YarnProtos.ContainerConfigurationProto, String> configuration =
+          app.getApplicationSubmissionContext()
+          .getAMContainerSpec().getConfiguration();
+      if (configuration != null) {
+        container.setConfiguration(configuration);
+      }
     }
 
     if (!blacklistAdditions.isEmpty() || !blacklistRemovals.isEmpty()) {

@@ -252,7 +252,8 @@ public abstract class ContainerLaunchContext {
    */
   @Public
   @Stable
-  public abstract Map<YarnProtos.ContainerConfigurationProto, String> getConfiguration();
+  public abstract Map<YarnProtos.ContainerConfigurationProto, String>
+    getConfiguration();
 
   /**
    * Add <em>configuration entries</em> for the container. All pre-existing Map
