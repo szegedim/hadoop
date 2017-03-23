@@ -58,7 +58,7 @@ public class ContainerLaunchContextInfo {
   @XmlElementWrapper(name = "application-acls")
   HashMap<ApplicationAccessType, String> acls;
 
-  @XmlElement(name = "configuration")
+  @XmlElementWrapper(name = "configuration")
   private
   HashMap<String, String> configuration;
 
