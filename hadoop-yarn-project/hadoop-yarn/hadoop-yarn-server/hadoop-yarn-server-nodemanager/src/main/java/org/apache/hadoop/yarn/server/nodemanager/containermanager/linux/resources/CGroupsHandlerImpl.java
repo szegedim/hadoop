@@ -173,9 +173,6 @@ class CGroupsHandlerImpl implements CGroupsHandler {
 
       if (controllerPath != null) {
         ret.put(controller, controllerPath);
-      } else {
-        LOG.warn("Controller not mounted but automount disabled: " +
-            subsystemName);
       }
     }
     return ret;
@@ -359,6 +356,14 @@ class CGroupsHandlerImpl implements CGroupsHandler {
     if (enableCGroupMount) {
       // We have a controller that needs to be mounted
       mountCGroupController(controller);
+    } else {
+      String controllerPath = getControllerPath(controller);
+
+      if (controllerPath == null) {
+        throw new ResourceHandlerException(
+            "Controller not mounted but automount disabled: " +
+                controller.getName());
+      }
     }
 
     // We are working with a pre-mounted contoller
@@ -381,7 +386,14 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       throws ResourceHandlerException {
     // Check permissions to cgroup hierarchy and
     // create YARN cgroup if it does not exist, yet
-    File rootHierarchy = new File(getControllerPath(controller));
+    String controllerPath = getControllerPath(controller);
+
+    if (controllerPath == null) {
+      throw new ResourceHandlerException(
+          "Controller not mounted: " + controller.getName());
+    }
+
+    File rootHierarchy = new File(controllerPath);
     File yarnHierarchy = new File(rootHierarchy, cGroupPrefix);
     String subsystemName = controller.getName();
 
