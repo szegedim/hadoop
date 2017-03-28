@@ -297,9 +297,12 @@ public class TestCGroupsHandlerImpl {
     File mockMtabFile = createMockMTab(parentDir);
 
     // Run mtabs parsing
+    Map<String, List<String>> newMtab =
+        CGroupsHandlerImpl.parseMtab(mockMtabFile.getAbsolutePath());
     Map<CGroupsHandler.CGroupController, String> controllerPaths =
         CGroupsHandlerImpl.initializeControllerPathsFromMtab(
-            mockMtabFile.getAbsolutePath(), hierarchy);
+            newMtab,
+            hierarchy);
 
     // Verify
     Assert.assertEquals(2, controllerPaths.size());

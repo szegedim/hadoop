@@ -21,6 +21,7 @@
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resources;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -66,6 +67,7 @@ class CGroupsHandlerImpl implements CGroupsHandler {
   private final long deleteCGroupTimeout;
   private final long deleteCGroupDelay;
   private Map<CGroupController, String> controllerPaths;
+  private Map<String, List<String>> parsedMtab;
   private final ReadWriteLock rwLock;
   private final PrivilegedOperationExecutor privilegedOperationExecutor;
   private final Clock clock;
@@ -95,6 +97,7 @@ class CGroupsHandlerImpl implements CGroupsHandler {
         conf.getLong(YarnConfiguration.NM_LINUX_CONTAINER_CGROUPS_DELETE_DELAY,
             YarnConfiguration.DEFAULT_NM_LINUX_CONTAINER_CGROUPS_DELETE_DELAY);
     this.controllerPaths = new HashMap<>();
+    this.parsedMtab = new HashMap<>();
     this.rwLock = new ReentrantReadWriteLock();
     this.privilegedOperationExecutor = privilegedOperationExecutor;
     this.clock = SystemClock.getInstance();
@@ -128,51 +131,52 @@ class CGroupsHandlerImpl implements CGroupsHandler {
   }
 
   private void initializeControllerPaths() throws ResourceHandlerException {
-    if (enableCGroupMount) {
-      // nothing to do here - we support 'deferred' mounting of specific
-      // controllers - we'll populate the path for a given controller when an
-      // explicit mountCGroupController request is issued.
-      LOG.info("CGroup controller mounting enabled.");
-    } else {
-      // cluster admins are expected to have mounted controllers in specific
-      // locations - we'll attempt to figure out mount points
+    // cluster admins are expected to have mounted controllers in specific
+    // locations - we'll attempt to figure out mount points
+    // We do this even if we plan to mount cgroups. The subsystems for new
+    // and existing mount points have to match.
 
-      Map<CGroupController, String> cPaths =
-          initializeControllerPathsFromMtab(mtabFile, this.cGroupPrefix);
-      // we want to do a bulk update without the paths changing concurrently
-      try {
-        rwLock.writeLock().lock();
-        controllerPaths = cPaths;
-      } finally {
-        rwLock.writeLock().unlock();
-      }
+    Map<String, List<String>> newMtab = null;
+    Map<CGroupController, String> cPaths = null;
+    try {
+      // parse mtab
+      newMtab = parseMtab(mtabFile);
+
+      // find cgroup controller paths
+      cPaths = initializeControllerPathsFromMtab(newMtab, this.cGroupPrefix);
+    } catch (IOException e) {
+      LOG.warn("Failed to initialize controller paths! Exception: " + e);
+      throw new ResourceHandlerException(
+          "Failed to initialize controller paths!");
+    }
+
+    // we want to do a bulk update without the paths changing concurrently
+    try {
+      rwLock.writeLock().lock();
+      controllerPaths = cPaths;
+      parsedMtab = newMtab;
+    } finally {
+      rwLock.writeLock().unlock();
     }
   }
 
   @VisibleForTesting
   static Map<CGroupController, String> initializeControllerPathsFromMtab(
-      String mtab, String cGroupPrefix) throws ResourceHandlerException {
-    try {
-      Map<String, List<String>> parsedMtab = parseMtab(mtab);
-      Map<CGroupController, String> ret = new HashMap<>();
+      Map<String, List<String>> parsedMtab, String cGroupPrefix) throws ResourceHandlerException {
+    Map<CGroupController, String> ret = new HashMap<>();
 
-      for (CGroupController controller : CGroupController.values()) {
-        String subsystemName = controller.getName();
-        String controllerPath = findControllerInMtab(subsystemName, parsedMtab);
+    for (CGroupController controller : CGroupController.values()) {
+      String subsystemName = controller.getName();
+      String controllerPath = findControllerInMtab(subsystemName, parsedMtab);
 
-        if (controllerPath != null) {
-          ret.put(controller, controllerPath);
-        } else {
-          LOG.warn("Controller not mounted but automount disabled: " +
-              subsystemName);
-        }
+      if (controllerPath != null) {
+        ret.put(controller, controllerPath);
+      } else {
+        LOG.warn("Controller not mounted but automount disabled: " +
+            subsystemName);
       }
-      return ret;
-    } catch (IOException e) {
-      LOG.warn("Failed to initialize controller paths! Exception: " + e);
-      throw new ResourceHandlerException(
-        "Failed to initialize controller paths!");
     }
+    return ret;
   }
 
   /* We are looking for entries of the form:
@@ -190,7 +194,8 @@ class CGroupsHandlerImpl implements CGroupsHandler {
    * for mounts with type "cgroup". Cgroup controllers will
    * appear in the list of options for a path.
    */
-  private static Map<String, List<String>> parseMtab(String mtab)
+  @VisibleForTesting
+  static Map<String, List<String>> parseMtab(String mtab)
       throws IOException {
     Map<String, List<String>> ret = new HashMap<String, List<String>>();
     BufferedReader in = null;
@@ -251,29 +256,42 @@ class CGroupsHandlerImpl implements CGroupsHandler {
 
   private void mountCGroupController(CGroupController controller)
       throws ResourceHandlerException {
-    String path = getControllerPath(controller);
+    String existingMountPath = getControllerPath(controller);
+    StringBuffer desiredMountPath = new StringBuffer()
+        .append(cGroupMountPath).append('/').append(controller.getName());
 
-    if (path == null) {
+    if (existingMountPath == null ||
+        !desiredMountPath.equals(existingMountPath)) {
       try {
         //lock out other readers/writers till we are done
         rwLock.writeLock().lock();
 
         String hierarchy = cGroupPrefix;
-        StringBuffer controllerPath = new StringBuffer()
-            .append(cGroupMountPath).append('/').append(controller.getName());
+
+        // If the controller was already mounted we have to mount it
+        // with the same options to clone the mount point otherwise
+        // the operation will fail
+        String mountOptions = null;
+        if (existingMountPath != null) {
+          mountOptions = Joiner.on(',')
+              .join(parsedMtab.get(existingMountPath));
+        } else {
+          mountOptions = controller.getName();
+        }
+
         StringBuffer cGroupKV = new StringBuffer()
-            .append(controller.getName()).append('=').append(controllerPath);
+            .append(mountOptions).append('=').append(desiredMountPath);
         PrivilegedOperation.OperationType opType = PrivilegedOperation
             .OperationType.MOUNT_CGROUPS;
         PrivilegedOperation op = new PrivilegedOperation(opType);
 
         op.appendArgs(hierarchy, cGroupKV.toString());
         LOG.info("Mounting controller " + controller.getName() + " at " +
-              controllerPath);
+              desiredMountPath);
         privilegedOperationExecutor.executePrivilegedOperation(op, false);
 
         //if privileged operation succeeds, update controller paths
-        controllerPaths.put(controller, controllerPath.toString());
+        controllerPaths.put(controller, desiredMountPath.toString());
 
         return;
       } catch (PrivilegedOperationException e) {
@@ -284,7 +302,7 @@ class CGroupsHandlerImpl implements CGroupsHandler {
         rwLock.writeLock().unlock();
       }
     } else {
-      LOG.info("CGroup controller already mounted at: " + path);
+      LOG.info("CGroup controller already mounted at: " + existingMountPath);
       return;
     }
   }
@@ -329,11 +347,11 @@ class CGroupsHandlerImpl implements CGroupsHandler {
     if (enableCGroupMount) {
       // We have a controller that needs to be mounted
       mountCGroupController(controller);
-    } else {
-      // We are working with a pre-mounted contoller
-      // Make sure that Yarn cgroup hierarchy path exists
-      initializePreMountedCGroupController(controller);
     }
+
+    // We are working with a pre-mounted contoller
+    // Make sure that Yarn cgroup hierarchy path exists
+    initializePreMountedCGroupController(controller);
   }
 
   /**
