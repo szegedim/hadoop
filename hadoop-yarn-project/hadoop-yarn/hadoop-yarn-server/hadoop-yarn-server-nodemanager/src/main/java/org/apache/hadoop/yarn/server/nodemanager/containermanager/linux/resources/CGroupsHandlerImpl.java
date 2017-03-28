@@ -41,6 +41,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -199,6 +201,10 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       throws IOException {
     Map<String, List<String>> ret = new HashMap<String, List<String>>();
     BufferedReader in = null;
+    HashSet<String> validCgroups = new HashSet<>();
+    for (CGroupController controller : CGroupController.values()) {
+      validCgroups.add(controller.getName());
+    }
 
     try {
       FileInputStream fis = new FileInputStream(new File(mtab));
@@ -214,8 +220,14 @@ class CGroupsHandlerImpl implements CGroupsHandler {
           String options = m.group(3);
 
           if (type.equals(CGROUPS_FSTYPE)) {
-            List<String> value = Arrays.asList(options.split(","));
-            ret.put(path, value);
+            List<String> optionsList = Arrays.asList(options.split(","));
+            List<String> cgroupList = new LinkedList<>();
+            for(String cgroup: optionsList) {
+              if (validCgroups.contains(cgroup)) {
+                cgroupList.add(cgroup);
+              }
+            }
+            ret.put(path, cgroupList);
           }
         }
       }
