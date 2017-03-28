@@ -558,19 +558,11 @@ char *get_tmp_directory(const char *work_dir) {
  * with the desired permissions.
  */
 int mkdirs(const char* path, mode_t perm) {
-  return mkdirs(path, perm, 1);
-}
-
-/**
- * Ensure that the given path and all of the parent directories are created
- * with the desired permissions.
- */
-int mkdirs(const char* path, mode_t perm, int check_perm) {
   struct stat sb;
   char * npath;
   char * p;
   if (stat(path, &sb) == 0) {
-    return check_dir(path, sb.st_mode, perm, check_perm);
+    return check_dir(path, sb.st_mode, perm, 1);
   }
   npath = strdup(path);
   if (npath == NULL) {
@@ -595,7 +587,7 @@ int mkdirs(const char* path, mode_t perm, int check_perm) {
   }
 
   /* Create the final directory component. */
-  if (create_validate_dir(npath, perm, path, check_perm) == -1) {
+  if (create_validate_dir(npath, perm, path, 1) == -1) {
     free(npath);
     return -1;
   }
@@ -2069,10 +2061,8 @@ int mount_cgroup(const char *pair, const char *hierarchy) {
               pair);
     result = -1;
   } else {
-    const mode_t mount_perms = S_IRWXU;
-    mkdirs(mount_path, mount_perms, 0);
     if (mount("none", mount_path, "cgroup", 0, controller) == 0) {
-      char *buf = stpncpy(hier_path, mount_path, sizeof(hier_path) - 2);
+      char *buf = stpncpy(hier_path, mount_path, strlen(mount_path));
       *buf++ = '/';
       snprintf(buf, EXECUTOR_PATH_MAX - (buf - hier_path), "%s", hierarchy);
 
