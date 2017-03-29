@@ -95,7 +95,7 @@ public class TestCGroupsHandlerImpl {
   }
 
   /**
-   * Security manager simulating access denied
+   * Security manager simulating access denied.
    */
   private class MockSecurityManagerDenyWrite extends SecurityManager {
     @Override
@@ -107,7 +107,7 @@ public class TestCGroupsHandlerImpl {
   }
 
   /**
-   * Create configuration to mount cgroups that do not exist
+   * Create configuration to mount cgroups that do not exist.
    * @return configuration object
    */
   private YarnConfiguration createMountConfiguration() {
@@ -119,7 +119,7 @@ public class TestCGroupsHandlerImpl {
   }
 
   /**
-   * Create configuration where the cgroups are premounted
+   * Create configuration where the cgroups are premounted.
    * @param myHierarchy Yarn cgroup
    * @return configuration object
    */
@@ -144,7 +144,7 @@ public class TestCGroupsHandlerImpl {
   }
 
   /**
-   * Create simulated cgroups mount point
+   * Create simulated cgroups mount point.
    * @param parentDir cgroups mount point
    * @param cpuAcct simulate newer Linux behavior by mounting cpu with cpuacct
    * @return simulated mtab file location
@@ -198,8 +198,10 @@ public class TestCGroupsHandlerImpl {
     File emptyMtab = createEmptyCgroups();
 
     try {
-      CGroupsHandler cGroupsHandler = new CGroupsHandlerImpl(createMountConfiguration(),
-          privilegedOperationExecutorMock, emptyMtab.getAbsolutePath());
+      CGroupsHandler cGroupsHandler = new CGroupsHandlerImpl(
+          createMountConfiguration(),
+          privilegedOperationExecutorMock,
+          emptyMtab.getAbsolutePath());
       PrivilegedOperation expectedOp = new PrivilegedOperation(
           PrivilegedOperation.OperationType.MOUNT_CGROUPS);
       //This is expected to be of the form :
@@ -402,7 +404,8 @@ public class TestCGroupsHandlerImpl {
         privilegedOperationExecutorMock, mtab.getAbsolutePath());
 
     File cpuCgroupMountDir = new File(
-        cGroupsHandler.getPathForCGroup(CGroupsHandler.CGroupController.CPU, ""));
+        cGroupsHandler.getPathForCGroup(CGroupsHandler.CGroupController.CPU,
+            ""));
     // Test that a missing yarn hierarchy will be created automatically
     if (!cpuCgroupMountDir.equals(mountPoint)) {
       assertTrue("Directory should be deleted",
@@ -556,7 +559,8 @@ public class TestCGroupsHandlerImpl {
         oldMountPoint, true);
 
     File newMountPoint = new File(parentDir, newMountPointDir);
-    assertTrue("Could not create dirs", new File(newMountPoint, "cpu").mkdirs());
+    assertTrue("Could not create dirs",
+        new File(newMountPoint, "cpu").mkdirs());
 
     // Initialize Yarn classes
     Configuration confMount = createMountConfiguration();
@@ -572,8 +576,8 @@ public class TestCGroupsHandlerImpl {
         PrivilegedOperation.class);
     verify(privilegedOperationExecutorMock)
         .executePrivilegedOperation(opCaptor.capture(), eq(false));
-    File hierarchy =
+    File hierarchyFile =
         new File(new File(newMountPoint, "cpu"), this.hierarchy);
-    assertTrue("Yarn cgroup should exist", hierarchy.exists());
+    assertTrue("Yarn cgroup should exist", hierarchyFile.exists());
   }
 }

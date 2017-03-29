@@ -42,7 +42,7 @@ import java.util.concurrent.CountDownLatch;
 
 @Deprecated
 public class TestCgroupsLCEResourcesHandler {
-  static File cgroupDir = null;
+  private static File cgroupDir = null;
 
   @Before
   public void setUp() throws Exception {
@@ -132,9 +132,9 @@ public class TestCgroupsLCEResourcesHandler {
   static class CustomCgroupsLCEResourceHandler extends
       CgroupsLCEResourcesHandler {
 
-    String mtabFile;
-    int[] limits = new int[2];
-    boolean generateLimitsMode = false;
+    private String mtabFile;
+    private int[] limits = new int[2];
+    private boolean generateLimitsMode = false;
 
     @Override
     int[] getOverallLimits(float x) {
@@ -154,15 +154,11 @@ public class TestCgroupsLCEResourcesHandler {
     }
   }
 
-  public static File createMockCgroupMount(File parentDir, String type)
+  private static File createMockCgroupMount(File parentDir,
+                                            String type)
       throws IOException {
-    return createMockCgroupMount(parentDir, type, "hadoop-yarn");
-  }
-
-  private static File createMockCgroupMount(File parentDir, String type,
-                                            String hierarchy) throws IOException {
     File cgroupMountDir =
-        new File(parentDir.getAbsolutePath(), type + "/" + hierarchy);
+        new File(parentDir.getAbsolutePath(), type + "/hadoop-yarn");
     FileUtils.deleteQuietly(cgroupMountDir);
     if (!cgroupMountDir.mkdirs()) {
       String message =
