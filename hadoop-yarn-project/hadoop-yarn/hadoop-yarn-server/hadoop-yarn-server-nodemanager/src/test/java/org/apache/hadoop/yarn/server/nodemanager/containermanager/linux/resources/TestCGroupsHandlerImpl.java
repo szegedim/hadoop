@@ -191,23 +191,22 @@ public class TestCGroupsHandlerImpl {
   public void testMountController() throws IOException {
     File parentDir = new File(tmpPath);
     File cgroup = new File(parentDir, controller.getName());
-    cgroup.mkdirs();
-    CGroupsHandler cGroupsHandler = null;
+    assertTrue("cgroup dir should be cerated", cgroup.mkdirs());
     //Since we enabled (deferred) cgroup controller mounting, no interactions
     //should have occurred, with this mock
     verifyZeroInteractions(privilegedOperationExecutorMock);
     File emptyMtab = createEmptyCgroups();
 
     try {
-      cGroupsHandler = new CGroupsHandlerImpl(createMountConfiguration(),
+      CGroupsHandler cGroupsHandler = new CGroupsHandlerImpl(createMountConfiguration(),
           privilegedOperationExecutorMock, emptyMtab.getAbsolutePath());
       PrivilegedOperation expectedOp = new PrivilegedOperation(
           PrivilegedOperation.OperationType.MOUNT_CGROUPS);
       //This is expected to be of the form :
       //net_cls=<mount_path>/net_cls
-      StringBuffer controllerKV = new StringBuffer(controller.getName())
-          .append('=').append(tmpPath).append('/').append(controller.getName());
-      expectedOp.appendArgs(hierarchy, controllerKV.toString());
+      String controllerKV = controller.getName() + "=" + tmpPath
+          + Path.SEPARATOR + controller.getName();
+      expectedOp.appendArgs(hierarchy, controllerKV);
 
       cGroupsHandler.initializeCGroupController(controller);
       try {
@@ -261,19 +260,19 @@ public class TestCGroupsHandlerImpl {
     }
 
     String testCGroup = "container_01";
-    String expectedPath = new StringBuffer(controllerPath).append('/')
-        .append(testCGroup).toString();
+    String expectedPath =
+        controllerPath + Path.SEPARATOR + testCGroup;
     String path = cGroupsHandler.getPathForCGroup(controller, testCGroup);
     Assert.assertEquals(expectedPath, path);
 
-    String expectedPathTasks = new StringBuffer(expectedPath).append('/')
-        .append(CGroupsHandler.CGROUP_FILE_TASKS).toString();
+    String expectedPathTasks = expectedPath + Path.SEPARATOR
+        + CGroupsHandler.CGROUP_FILE_TASKS;
     path = cGroupsHandler.getPathForCGroupTasks(controller, testCGroup);
     Assert.assertEquals(expectedPathTasks, path);
 
     String param = CGroupsHandler.CGROUP_PARAM_CLASSID;
-    String expectedPathParam = new StringBuffer(expectedPath).append('/')
-        .append(controller.getName()).append('.').append(param).toString();
+    String expectedPathParam = expectedPath + Path.SEPARATOR
+        + controller.getName() + "." + param;
     path = cGroupsHandler.getPathForCGroupParam(controller, testCGroup, param);
     Assert.assertEquals(expectedPathParam, path);
   }
@@ -304,8 +303,8 @@ public class TestCGroupsHandlerImpl {
     }
 
     String testCGroup = "container_01";
-    String expectedPath = new StringBuffer(controllerPath).append('/')
-        .append(testCGroup).toString();
+    String expectedPath = controllerPath
+        + Path.SEPARATOR + testCGroup;
     try {
       String path = cGroupsHandler.createCGroup(controller, testCGroup);
 
@@ -322,8 +321,9 @@ public class TestCGroupsHandlerImpl {
 
       cGroupsHandler
           .updateCGroupParam(controller, testCGroup, param, paramValue);
-      String paramPath = new StringBuffer(expectedPath).append('/')
-          .append(controller.getName()).append('.').append(param).toString();
+      String paramPath = expectedPath
+          + Path.SEPARATOR + controller.getName()
+          + "." + param;
       File paramFile = new File(paramPath);
 
       assertTrue(paramFile.exists());
@@ -369,8 +369,7 @@ public class TestCGroupsHandlerImpl {
         CGroupsHandlerImpl.parseMtab(mockMtabFile.getAbsolutePath());
     Map<CGroupsHandler.CGroupController, String> controllerPaths =
         CGroupsHandlerImpl.initializeControllerPathsFromMtab(
-            newMtab,
-            hierarchy);
+            newMtab);
 
     // Verify
     Assert.assertEquals(2, controllerPaths.size());
