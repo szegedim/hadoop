@@ -154,6 +154,24 @@ public class TestCgroupsLCEResourcesHandler {
     }
   }
 
+  public static File createMockCgroupMount(File parentDir, String type)
+      throws IOException {
+    return createMockCgroupMount(parentDir, type, "hadoop-yarn");
+  }
+
+  private static File createMockCgroupMount(File parentDir, String type,
+                                            String hierarchy) throws IOException {
+    File cgroupMountDir =
+        new File(parentDir.getAbsolutePath(), type + "/" + hierarchy);
+    FileUtils.deleteQuietly(cgroupMountDir);
+    if (!cgroupMountDir.mkdirs()) {
+      String message =
+          "Could not create dir " + cgroupMountDir.getAbsolutePath();
+      throw new IOException(message);
+    }
+    return cgroupMountDir;
+  }
+
   @Test
   public void testInit() throws IOException {
     LinuxContainerExecutor mockLCE = new MockLinuxContainerExecutor();
@@ -168,12 +186,13 @@ public class TestCgroupsLCEResourcesHandler {
     handler.setConf(conf);
     handler.initConfig();
 
-    // create mock cgroup
-    File cpuCgroupMountDir = TestCGroupsHandlerImpl.createMockCgroupMount(
-        cgroupDir, "cpu");
-
     // create mock mtab
-    File mockMtab = TestCGroupsHandlerImpl.createMockMTab(cgroupDir);
+    File mockMtab =
+        TestCGroupsHandlerImpl.createPremountedCgroups(cgroupDir, false);
+
+    // create mock cgroup
+    File cpuCgroupMountDir = createMockCgroupMount(
+        cgroupDir, "cpu");
 
     // setup our handler and call init()
     handler.setMtabFile(mockMtab.getAbsolutePath());
@@ -265,12 +284,13 @@ public class TestCgroupsLCEResourcesHandler {
     handler.setConf(conf);
     handler.initConfig();
 
-    // create mock cgroup
-    File cpuCgroupMountDir = TestCGroupsHandlerImpl.createMockCgroupMount(
-        cgroupDir, "cpu");
-
     // create mock mtab
-    File mockMtab = TestCGroupsHandlerImpl.createMockMTab(cgroupDir);
+    File mockMtab =
+        TestCGroupsHandlerImpl.createPremountedCgroups(cgroupDir, false);
+
+    // create mock cgroup
+    File cpuCgroupMountDir = createMockCgroupMount(
+        cgroupDir, "cpu");
 
     // setup our handler and call init()
     handler.setMtabFile(mockMtab.getAbsolutePath());

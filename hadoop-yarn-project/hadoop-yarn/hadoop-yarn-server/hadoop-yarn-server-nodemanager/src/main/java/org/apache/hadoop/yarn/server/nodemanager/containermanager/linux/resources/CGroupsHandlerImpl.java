@@ -266,8 +266,8 @@ class CGroupsHandlerImpl implements CGroupsHandler {
   private void mountCGroupController(CGroupController controller)
       throws ResourceHandlerException {
     String existingMountPath = getControllerPath(controller);
-    StringBuffer desiredMountPath = new StringBuffer()
-        .append(cGroupMountPath).append('/').append(controller.getName());
+    String desiredMountPath = new StringBuffer().append(cGroupMountPath)
+        .append('/').append(controller.getName()).toString();
 
     if (existingMountPath == null ||
         !desiredMountPath.equals(existingMountPath)) {
