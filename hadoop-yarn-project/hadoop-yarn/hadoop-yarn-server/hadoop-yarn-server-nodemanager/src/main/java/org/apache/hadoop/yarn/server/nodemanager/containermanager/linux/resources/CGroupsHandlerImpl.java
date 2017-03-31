@@ -272,7 +272,9 @@ class CGroupsHandlerImpl implements CGroupsHandler {
   private void mountCGroupController(CGroupController controller)
       throws ResourceHandlerException {
     if (cGroupMountPath == null) {
-      throw new ResourceHandlerException("Trying to mount to null mount path");
+      throw new ResourceHandlerException(
+          String.format("Cgroups mount path not specified in %s.",
+              YarnConfiguration.NM_LINUX_CONTAINER_CGROUPS_MOUNT_PATH));
     }
     String existingMountPath = getControllerPath(controller);
     String requestedMountPath =
@@ -363,8 +365,11 @@ class CGroupsHandlerImpl implements CGroupsHandler {
 
       if (controllerPath == null) {
         throw new ResourceHandlerException(
-            "Controller not mounted but automount disabled: " +
-                controller.getName());
+            String.format("Controller %s not mounted."
+                + " You either need to mount it with %s"
+                + " or mount cgroups before launching Yarn",
+                controller.getName(), YarnConfiguration.
+                NM_LINUX_CONTAINER_CGROUPS_MOUNT));
       }
     }
 
@@ -392,7 +397,11 @@ class CGroupsHandlerImpl implements CGroupsHandler {
 
     if (controllerPath == null) {
       throw new ResourceHandlerException(
-          "Controller not mounted: " + controller.getName());
+          String.format("Controller %s not mounted."
+                  + " You either need to mount it with %s"
+                  + " or mount cgroups before launching Yarn",
+              controller.getName(), YarnConfiguration.
+                  NM_LINUX_CONTAINER_CGROUPS_MOUNT));
     }
 
     File rootHierarchy = new File(controllerPath);
@@ -447,10 +456,9 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       String errorMessage,
       String subsystemName,
       String yarnCgroupPath) {
-    return errorMessage + " Subsystem:" + subsystemName
-        + " Mount points:" + mtabFile
-        + " User:" + System.getProperty("user.name")
-        + " Path: " + yarnCgroupPath;
+    return String.format("%s Subsystem:%s Mount points:%s User:%s Path:%s ",
+        errorMessage, subsystemName, mtabFile, System.getProperty("user.name"),
+        yarnCgroupPath);
   }
 
   @Override
@@ -541,8 +549,8 @@ class CGroupsHandlerImpl implements CGroupsHandler {
     } while (!deleted && (clock.getTime() - start) < deleteCGroupTimeout);
 
     if (!deleted) {
-      LOG.warn("Unable to delete  " + cGroupPath +
-          ", tried to delete for " + deleteCGroupTimeout + "ms");
+      LOG.warn(String.format("Unable to delete  %s, tried to delete for %d ms",
+          cGroupPath, deleteCGroupTimeout));
     }
   }
 
@@ -551,12 +559,12 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       String param, String value) throws ResourceHandlerException {
     String cGroupParamPath = getPathForCGroupParam(controller, cGroupId, param);
     PrintWriter pw = null;
-    ResourceHandlerException exceptionToThrow = null;
+    ResourceHandlerException exceptionToThrowAfterFinally = null;
 
     if (LOG.isDebugEnabled()) {
       LOG.debug(
-          "updateCGroupParam for path: " + cGroupParamPath + " with value " +
-              value);
+          String.format("updateCGroupParam for path: %s with value %s",
+              cGroupParamPath, value));
     }
 
     try {
@@ -566,26 +574,26 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       pw.write(value);
     } catch (IOException e) {
       throw new ResourceHandlerException(
-          "Unable to write to " + cGroupParamPath
-          + " with value: " + value, e);
+          String.format("Unable to write to %s with value: %s",
+              cGroupParamPath, value), e);
     } finally {
       if (pw != null) {
         boolean hasError = pw.checkError();
         pw.close();
         if (hasError) {
-          exceptionToThrow = new ResourceHandlerException(
-              "Unable to write to " + cGroupParamPath
-                  + " with value: " + value);
+          exceptionToThrowAfterFinally = new ResourceHandlerException(
+              String.format("PrintWriter unable to write to %s with value: %s",
+                  cGroupParamPath, value));
         }
-        if (pw.checkError()) {
-          exceptionToThrow = new ResourceHandlerException(
-              "Error while closing cgroup file" +
-              " " + cGroupParamPath);
+        if (pw.checkError() && exceptionToThrowAfterFinally == null) {
+          exceptionToThrowAfterFinally = new ResourceHandlerException(
+              String.format("Error while closing cgroup file %s",
+                  cGroupParamPath));
         }
       }
     }
-    if (exceptionToThrow != null) {
-      throw exceptionToThrow;
+    if (exceptionToThrowAfterFinally != null) {
+      throw exceptionToThrowAfterFinally;
     }
   }
 
