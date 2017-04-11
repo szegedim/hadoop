@@ -236,7 +236,7 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       Map<String, List<String>> entries) {
     for (Map.Entry<String, List<String>> e : entries.entrySet()) {
       if (e.getValue().contains(controller)) {
-        if (FileUtil.canRead(new File(e.getKey()))) {
+        if (new File(e.getKey()).canRead()) {
           return e.getKey();
         } else {
           LOG.warn(String.format(
