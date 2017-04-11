@@ -28,10 +28,9 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
@@ -39,6 +38,7 @@ import java.util.regex.Pattern;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.google.common.collect.Sets;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -262,7 +262,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
   /**
    * If tasks file is empty, delete the cgroup.
    *
-   * @param file object referring to the cgroup to be deleted
+   * @param cgf object referring to the cgroup to be deleted
    * @return Boolean indicating whether cgroup was deleted
    */
   @VisibleForTesting
@@ -396,8 +396,8 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
    * for mounts with type "cgroup". Cgroup controllers will
    * appear in the list of options for a path.
    */
-  private Map<String, List<String>> parseMtab() throws IOException {
-    Map<String, List<String>> ret = new HashMap<String, List<String>>();
+  private Map<String, HashSet<String>> parseMtab() throws IOException {
+    Map<String, HashSet<String>> ret = new HashMap<String, HashSet<String>>();
     BufferedReader in = null;
 
     try {
@@ -414,7 +414,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
           String options = m.group(3);
 
           if (type.equals(CGROUPS_FSTYPE)) {
-            List<String> value = Arrays.asList(options.split(","));
+            HashSet<String> value = Sets.newHashSet(options.split(","));
             ret.put(path, value);
           }
         }
@@ -430,8 +430,8 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
 
   @VisibleForTesting
   String findControllerInMtab(String controller,
-                                      Map<String, List<String>> entries) {
-    for (Entry<String, List<String>> e : entries.entrySet()) {
+                                      Map<String, HashSet<String>> entries) {
+    for (Entry<String, HashSet<String>> e : entries.entrySet()) {
       if (e.getValue().contains(controller)) {
         if (new File(e.getKey()).canRead()) {
           return e.getKey();
@@ -447,7 +447,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
 
   private void initializeControllerPaths() throws IOException {
     String controllerPath;
-    Map<String, List<String>> parsedMtab = parseMtab();
+    Map<String, HashSet<String>> parsedMtab = parseMtab();
 
     // CPU
 

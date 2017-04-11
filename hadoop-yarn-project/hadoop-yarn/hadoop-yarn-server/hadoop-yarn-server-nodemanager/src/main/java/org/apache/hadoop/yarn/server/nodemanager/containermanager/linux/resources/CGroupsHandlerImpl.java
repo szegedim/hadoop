@@ -222,14 +222,10 @@ class CGroupsHandlerImpl implements CGroupsHandler {
           String options = m.group(3);
 
           if (type.equals(CGROUPS_FSTYPE)) {
-            List<String> optionsList = Arrays.asList(options.split(","));
-            List<String> cgroupList = new LinkedList<>();
+            List<String> cgroupList =
+                new LinkedList<>(Arrays.asList(options.split(",")));
             // Collect the valid subsystem names
-            for(String cgroup: optionsList) {
-              if (validCgroups.contains(cgroup)) {
-                cgroupList.add(cgroup);
-              }
-            }
+            cgroupList.retainAll(validCgroups);
             ret.put(path, cgroupList);
           }
         }
@@ -559,7 +555,6 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       String param, String value) throws ResourceHandlerException {
     String cGroupParamPath = getPathForCGroupParam(controller, cGroupId, param);
     PrintWriter pw = null;
-    ResourceHandlerException exceptionToThrowAfterFinally = null;
 
     if (LOG.isDebugEnabled()) {
       LOG.debug(
@@ -581,19 +576,16 @@ class CGroupsHandlerImpl implements CGroupsHandler {
         boolean hasError = pw.checkError();
         pw.close();
         if (hasError) {
-          exceptionToThrowAfterFinally = new ResourceHandlerException(
+          throw new ResourceHandlerException(
               String.format("PrintWriter unable to write to %s with value: %s",
                   cGroupParamPath, value));
         }
-        if (pw.checkError() && exceptionToThrowAfterFinally == null) {
-          exceptionToThrowAfterFinally = new ResourceHandlerException(
+        if (pw.checkError()) {
+          throw new ResourceHandlerException(
               String.format("Error while closing cgroup file %s",
                   cGroupParamPath));
         }
       }
-    }
-    if (exceptionToThrowAfterFinally != null) {
-      throw exceptionToThrowAfterFinally;
     }
   }
 
