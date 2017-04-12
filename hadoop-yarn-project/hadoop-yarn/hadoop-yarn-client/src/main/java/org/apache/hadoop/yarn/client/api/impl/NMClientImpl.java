@@ -191,6 +191,10 @@ public class NMClientImpl extends NMClient {
         proxy =
             cmProxy.getProxy(container.getNodeId().toString(),
                 container.getId());
+        if (container.getConfiguration() != null) {
+          // TODO filter this list based on container type
+          containerLaunchContext.setConfiguration(container.getConfiguration());
+        }
         StartContainerRequest scRequest =
             StartContainerRequest.newInstance(containerLaunchContext,
               container.getContainerToken());

@@ -250,10 +250,6 @@ public class NMClientAsyncImpl extends NMClientAsync {
           RPCUtil.getRemoteException("Container " + container.getId() +
               " is already started or scheduled to start"));
     }
-    if (container.getConfiguration() != null) {
-      // TODO filter this list based on container type
-      containerLaunchContext.setConfiguration(container.getConfiguration());
-    }
     try {
       events.put(new StartContainerEvent(container, containerLaunchContext));
     } catch (InterruptedException e) {
