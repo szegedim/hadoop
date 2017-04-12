@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -396,8 +397,8 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
    * for mounts with type "cgroup". Cgroup controllers will
    * appear in the list of options for a path.
    */
-  private Map<String, HashSet<String>> parseMtab() throws IOException {
-    Map<String, HashSet<String>> ret = new HashMap<String, HashSet<String>>();
+  private Map<String, Set<String>> parseMtab() throws IOException {
+    Map<String, Set<String>> ret = new HashMap<String, Set<String>>();
     BufferedReader in = null;
 
     try {
@@ -429,9 +430,9 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
   }
 
   @VisibleForTesting
-  String findControllerInMtab(String controller,
-                                      Map<String, HashSet<String>> entries) {
-    for (Entry<String, HashSet<String>> e : entries.entrySet()) {
+  private String findControllerInMtab(String controller,
+                                      Map<String, Set<String>> entries) {
+    for (Entry<String, Set<String>> e : entries.entrySet()) {
       if (e.getValue().contains(controller)) {
         if (new File(e.getKey()).canRead()) {
           return e.getKey();
@@ -447,7 +448,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
 
   private void initializeControllerPaths() throws IOException {
     String controllerPath;
-    Map<String, HashSet<String>> parsedMtab = parseMtab();
+    Map<String, Set<String>> parsedMtab = parseMtab();
 
     // CPU
 
