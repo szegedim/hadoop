@@ -252,6 +252,7 @@ public class TestCGroupsHandlerImpl {
     String cpuMtabContent =
         "none " + parentDir.getAbsolutePath()
             + "/cpu cgroup rw,relatime,cpu 0 0\n";
+    // Mark an empty directory called 'cp' cgroup. It is processed before 'cpu'
     String cpuMtabContentMissing =
         "none " + parentDir.getAbsolutePath()
             + "/cp cgroup rw,relatime,cpu 0 0\n";
