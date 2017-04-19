@@ -30,6 +30,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperation;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperationException;
@@ -231,7 +232,12 @@ class CGroupsHandlerImpl implements CGroupsHandler {
         }
       }
     } catch (IOException e) {
-      throw new IOException("Error while reading " + mtab, e);
+      if (Shell.LINUX) {
+        throw new IOException("Error while reading " + mtab, e);
+      } else {
+        // Ignore the error, if a unit test is running on an os other than Linux
+        LOG.warn("Error while reading " + mtab, e);
+      }
     } finally {
       IOUtils.cleanup(LOG, in);
     }
