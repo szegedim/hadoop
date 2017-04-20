@@ -33,7 +33,10 @@ import org.junit.Before;
 import org.mockito.Mockito;
 
 import java.io.*;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 
@@ -342,4 +345,24 @@ public class TestCgroupsLCEResourcesHandler {
     FileUtils.deleteQuietly(cgroupDir);
   }
 
+  @Test
+  public void testSelectCgroup() {
+    CgroupsLCEResourcesHandler test = new CgroupsLCEResourcesHandler();
+    Map<String, List<String>> cgroups = new LinkedHashMap<>();
+    File cpu = new File(cgroupDir, "cpu");
+    File cpuNoExist = new File(cgroupDir, "cpuNoExist");
+    File memory = new File(cgroupDir, "memory");
+
+    Assert.assertTrue("temp dir should be created", cpu.mkdirs());
+    Assert.assertTrue("temp dir should be created", memory.mkdirs());
+
+    cgroups.put(memory.getAbsolutePath(), Collections.singletonList("memory"));
+    cgroups.put(cpuNoExist.getAbsolutePath(), Collections.singletonList("cpu"));
+    cgroups.put(cpu.getAbsolutePath(), Collections.singletonList("cpu"));
+    String selectedCPU = test.findControllerInMtab("cpu", cgroups);
+    Assert.assertEquals("Wrong directory selected",
+        cpu.getAbsolutePath(), selectedCPU);
+    FileUtils.deleteQuietly(cpu);
+    FileUtils.deleteQuietly(memory);
+  }
 }
