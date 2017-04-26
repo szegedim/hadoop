@@ -235,7 +235,7 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       if (Shell.LINUX) {
         throw new IOException("Error while reading " + mtab, e);
       } else {
-        // Ignore the error, if a unit test is running on an os other than Linux
+        // Ignore the error, if we are running on an os other than Linux
         LOG.warn("Error while reading " + mtab, e);
       }
     } finally {
