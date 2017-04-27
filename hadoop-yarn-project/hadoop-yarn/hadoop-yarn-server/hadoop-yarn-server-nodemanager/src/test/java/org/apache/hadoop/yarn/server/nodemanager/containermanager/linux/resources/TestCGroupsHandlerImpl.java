@@ -496,7 +496,7 @@ public class TestCGroupsHandlerImpl {
     File memory = new File(tmpPath, "memory");
     try {
       CGroupsHandlerImpl handler = new CGroupsHandlerImpl(
-          conf,
+          createNoMountConfiguration(tmpPath),
           privilegedOperationExecutorMock);
       Map<String, List<String>> cgroups = new LinkedHashMap<>();
 
@@ -516,11 +516,6 @@ public class TestCGroupsHandlerImpl {
       FileUtils.deleteQuietly(cpu);
       FileUtils.deleteQuietly(memory);
     }
-  }
-
-  @After
-  public void teardown() {
-    FileUtil.fullyDelete(new File(tmpPath));
   }
 
   /**

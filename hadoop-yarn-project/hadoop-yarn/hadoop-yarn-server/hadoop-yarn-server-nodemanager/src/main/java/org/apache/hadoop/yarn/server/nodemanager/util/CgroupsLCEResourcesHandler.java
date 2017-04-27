@@ -430,7 +430,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
   }
 
   @VisibleForTesting
-  private String findControllerInMtab(String controller,
+  String findControllerInMtab(String controller,
                                       Map<String, Set<String>> entries) {
     for (Entry<String, Set<String>> e : entries.entrySet()) {
       if (e.getValue().contains(controller)) {

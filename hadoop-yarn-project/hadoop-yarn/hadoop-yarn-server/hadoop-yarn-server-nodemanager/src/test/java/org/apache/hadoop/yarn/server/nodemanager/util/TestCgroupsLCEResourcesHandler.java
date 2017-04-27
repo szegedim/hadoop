@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 @Deprecated
@@ -368,17 +369,17 @@ public class TestCgroupsLCEResourcesHandler {
     File memory = new File(cgroupDir, "memory");
     try {
       CgroupsLCEResourcesHandler handler = new CgroupsLCEResourcesHandler();
-      Map<String, List<String>> cgroups = new LinkedHashMap<>();
+      Map<String, Set<String>> cgroups = new LinkedHashMap<>();
 
       Assert.assertTrue("temp dir should be created", cpu.mkdirs());
       Assert.assertTrue("temp dir should be created", memory.mkdirs());
       Assert.assertFalse("temp dir should not be created", cpuNoExist.exists());
 
       cgroups.put(
-          memory.getAbsolutePath(), Collections.singletonList("memory"));
+          memory.getAbsolutePath(), Collections.singleton("memory"));
       cgroups.put(
-          cpuNoExist.getAbsolutePath(), Collections.singletonList("cpu"));
-      cgroups.put(cpu.getAbsolutePath(), Collections.singletonList("cpu"));
+          cpuNoExist.getAbsolutePath(), Collections.singleton("cpu"));
+      cgroups.put(cpu.getAbsolutePath(), Collections.singleton("cpu"));
       String selectedCPU = handler.findControllerInMtab("cpu", cgroups);
       Assert.assertEquals("Wrong CPU mount point selected",
           cpu.getAbsolutePath(), selectedCPU);
