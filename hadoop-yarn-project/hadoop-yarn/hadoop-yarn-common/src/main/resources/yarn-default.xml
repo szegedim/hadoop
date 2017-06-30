@@ -1509,11 +1509,22 @@
   </property>
 
   <property>
-    <description>Where the LCE should attempt to mount cgroups if not found. Common locations
-    include /sys/fs/cgroup and /cgroup; the default location can vary depending on the Linux
-    distribution in use. This path must exist before the NodeManager is launched.
-    Only used when the LCE resources handler is set to the CgroupsLCEResourcesHandler, and
-    yarn.nodemanager.linux-container-executor.cgroups.mount is true.</description>
+    <description>Requested cgroup mount path. Yarn has built in functionality to discover
+    the system cgroup mount paths, so use this setting only, if the discovery does not work.
+
+    This path must exist before the NodeManager is launched.
+    The location can vary depending on the Linux distribution in use.
+    Common locations include /sys/fs/cgroup and /cgroup.
+
+    If cgroups are not mounted, set yarn.nodemanager.linux-container-executor.cgroups.mount
+    to true. In this case it specifies, where the LCE should attempt to mount cgroups if not found.
+
+    If cgroups is accessible through lxcfs or some other file system,
+    then set this path and yarn.nodemanager.linux-container-executor.cgroups.mount to false.
+    Yarn tries to use this path first, before any cgroup mount point discovery.
+    If it cannot find this directory, it falls back to searching for cgroup mount points in the system.
+    Only used when the LCE resources handler is set to the CgroupsLCEResourcesHandler
+    </description>
     <name>yarn.nodemanager.linux-container-executor.cgroups.mount-path</name>
   </property>
 

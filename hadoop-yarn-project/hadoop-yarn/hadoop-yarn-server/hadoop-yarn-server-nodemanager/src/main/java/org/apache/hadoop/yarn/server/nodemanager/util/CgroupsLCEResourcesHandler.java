@@ -27,6 +27,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,6 +52,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.server.nodemanager.LinuxContainerExecutor;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperation;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resources.CGroupsCpuResourceHandlerImpl;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resources.CGroupsHandler;
 import org.apache.hadoop.yarn.util.Clock;
 import org.apache.hadoop.yarn.util.ResourceCalculatorPlugin;
 import org.apache.hadoop.yarn.util.SystemClock;
@@ -400,6 +402,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
   private Map<String, Set<String>> parseMtab() throws IOException {
     Map<String, Set<String>> ret = new HashMap<String, Set<String>>();
     BufferedReader in = null;
+    Set<String> validCgroups = CGroupsHandler.CGroupController.getValidCGroups();
 
     try {
       FileInputStream fis = new FileInputStream(new File(getMtabFileName()));
@@ -415,8 +418,11 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
           String options = m.group(3);
 
           if (type.equals(CGROUPS_FSTYPE)) {
-            HashSet<String> value = Sets.newHashSet(options.split(","));
-            ret.put(path, value);
+            Set<String> cgroupList =
+                    new HashSet<>(Arrays.asList(options.split(",")));
+            // Collect the valid subsystem names
+            cgroupList.retainAll(validCgroups);
+            ret.put(path, cgroupList);
           }
         }
       }
@@ -446,9 +452,51 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
     return null;
   }
 
+  /**
+   * If a cgroup mount directory is specified, it returns cgroup directories with valid names
+   * The requirement is that each hierarchy has to be named with the comma separated names of subsystems supported
+   * For example: /sys/fs/cgroup/cpu,cpuacct
+   * @param cGroupMountPathSpecified Root cgroup mount path (/sys/fs/cgroup in the example above)
+   * @return A path to cgroup subsystem set mapping in the same format as {@link #parseMtab()}
+   * @throws IOException if the specified directory cannot be listed
+   */
+  private static Map<String, Set<String>> checkConfiguredCGroupPath(String cGroupMountPathSpecified)
+          throws IOException {
+    Set<String> validCgroups = CGroupsHandler.CGroupController.getValidCGroups();
+    Map<String, Set<String>> ret = new HashMap<>();
+    File cgroupDir = new File(cGroupMountPathSpecified);
+    File[] list = cgroupDir.listFiles();
+
+    if (list == null) {
+      throw new IOException("Empty cgroup mount directory specified: " + cGroupMountPathSpecified);
+    }
+    for (File candidate: list) {
+      Set<String> cgroupList =
+              new HashSet<>(Arrays.asList(candidate.getName().split(",")));
+      // Collect the valid subsystem names
+      cgroupList.retainAll(validCgroups);
+      if (!cgroupList.isEmpty()) {
+        if (candidate.isDirectory() && candidate.canWrite()) {
+          ret.put(candidate.getAbsolutePath(), cgroupList);
+        } else {
+          LOG.warn("The following cgroup is not a directory or it is not writable" + candidate.getAbsolutePath());
+        }
+      }
+    }
+    return ret;
+  }
+
   private void initializeControllerPaths() throws IOException {
     String controllerPath;
-    Map<String, Set<String>> parsedMtab = parseMtab();
+    Map<String, Set<String>> parsedMtab = null;
+
+    if (this.cgroupMountPath != null && !this.cgroupMount) {
+      parsedMtab = checkConfiguredCGroupPath(this.cgroupMountPath);
+    }
+
+    if (parsedMtab == null) {
+      parsedMtab = parseMtab();
+    }
 
     // CPU
 

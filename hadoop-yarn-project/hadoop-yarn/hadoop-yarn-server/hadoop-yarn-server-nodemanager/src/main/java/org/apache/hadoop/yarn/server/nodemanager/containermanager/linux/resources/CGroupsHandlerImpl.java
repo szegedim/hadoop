@@ -142,11 +142,17 @@ class CGroupsHandlerImpl implements CGroupsHandler {
     // the same hierarchy will be mounted at each mount point with the same
     // subsystem set.
 
-    Map<String, Set<String>> newMtab;
+    Map<String, Set<String>> newMtab = null;
     Map<CGroupController, String> cPaths;
     try {
-      // parse mtab
-      newMtab = parseMtab(mtabFile);
+      if (this.cGroupMountPath != null && !this.enableCGroupMount) {
+        newMtab = checkConfiguredCGroupPath(this.cGroupMountPath);
+      }
+
+      if (newMtab == null) {
+        // parse mtab
+        newMtab = parseMtab(mtabFile);
+      }
 
       // find cgroup controller paths
       cPaths = initializeControllerPathsFromMtab(newMtab);
@@ -183,6 +189,40 @@ class CGroupsHandlerImpl implements CGroupsHandler {
     return ret;
   }
 
+  /**
+   * If a cgroup mount directory is specified, it returns cgroup directories with valid names
+   * The requirement is that each hierarchy has to be named with the comma separated names of subsystems supported
+   * For example: /sys/fs/cgroup/cpu,cpuacct
+   * @param cGroupMountPathSpecified Root cgroup mount path (/sys/fs/cgroup in the example above)
+   * @return A path to cgroup subsystem set mapping in the same format as {@link #parseMtab(String)}
+   * @throws IOException if the specified directory cannot be listed
+   */
+  private static Map<String, Set<String>> checkConfiguredCGroupPath(String cGroupMountPathSpecified)
+          throws IOException {
+    Set<String> validCgroups = CGroupsHandler.CGroupController.getValidCGroups();
+    Map<String, Set<String>> ret = new HashMap<>();
+    File cgroupDir = new File(cGroupMountPathSpecified);
+    File[] list = cgroupDir.listFiles();
+
+    if (list == null) {
+      throw new IOException("Empty cgroup mount directory specified: " + cGroupMountPathSpecified);
+    }
+    for (File candidate: list) {
+      Set<String> cgroupList =
+              new HashSet<>(Arrays.asList(candidate.getName().split(",")));
+      // Collect the valid subsystem names
+      cgroupList.retainAll(validCgroups);
+      if (!cgroupList.isEmpty()) {
+        if (candidate.isDirectory() && candidate.canWrite()) {
+          ret.put(candidate.getAbsolutePath(), cgroupList);
+        } else {
+          LOG.warn("The following cgroup is not a directory or it is not writable" + candidate.getAbsolutePath());
+        }
+      }
+    }
+    return ret;
+  }
+
   /* We are looking for entries of the form:
    * none /cgroup/path/mem cgroup rw,memory 0 0
    *
@@ -203,10 +243,7 @@ class CGroupsHandlerImpl implements CGroupsHandler {
       throws IOException {
     Map<String, Set<String>> ret = new HashMap<>();
     BufferedReader in = null;
-    HashSet<String> validCgroups = new HashSet<>();
-    for (CGroupController controller : CGroupController.values()) {
-      validCgroups.add(controller.getName());
-    }
+    Set<String> validCgroups = CGroupsHandler.CGroupController.getValidCGroups();
 
     try {
       FileInputStream fis = new FileInputStream(new File(mtab));
