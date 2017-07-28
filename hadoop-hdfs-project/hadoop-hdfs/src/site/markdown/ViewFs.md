@@ -166,7 +166,7 @@ This will NOT work in the new world if `/user` and `/data` are actually stored o
 
     The mount table is read when the job is submitted to the cluster. The `XInclude` in `core-site.xml` is expanded at job submission time. This means that if the mount table are changed then the jobs need to be resubmitted. Due to this reason, we want to implement merge-mount which will greatly reduce the need to change mount tables. Further, we would like to read the mount tables via another mechanism that is initialized at job start time in the future.
 
-6.  **Will JobTracker (or Yarn’s Resource Manager) itself use the ViewFs?**
+6.  **Will JobTracker (or YARN’s Resource Manager) itself use the ViewFs?**
 
     No, it does not need to. Neither does the NodeManager.
 

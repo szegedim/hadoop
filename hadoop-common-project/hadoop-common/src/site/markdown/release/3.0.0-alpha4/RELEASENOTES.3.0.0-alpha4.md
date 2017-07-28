@@ -108,7 +108,7 @@ Changed the behavior of removing directories with sticky bits, so that it is clo
 
 ---
 
-* [YARN-6177](https://issues.apache.org/jira/browse/YARN-6177) | *Major* | **Yarn client should exit with an informative error message if an incompatible Jersey library is used at client**
+* [YARN-6177](https://issues.apache.org/jira/browse/YARN-6177) | *Major* | **YARN client should exit with an informative error message if an incompatible Jersey library is used at client**
 
 Let yarn client exit with an informative error message if an incompatible Jersey library is used from client side.
 

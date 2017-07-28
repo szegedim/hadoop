@@ -52,7 +52,7 @@ Add getUGIFromSubject to leverage an external kerberos authentication
 
 ---
 
-* [HADOOP-9919](https://issues.apache.org/jira/browse/HADOOP-9919) | *Major* | **Update hadoop-metrics2.properties examples to Yarn**
+* [HADOOP-9919](https://issues.apache.org/jira/browse/HADOOP-9919) | *Major* | **Update hadoop-metrics2.properties examples to YARN**
 
 Remove MRv1 settings from hadoop-metrics2.properties, add YARN settings instead.
 

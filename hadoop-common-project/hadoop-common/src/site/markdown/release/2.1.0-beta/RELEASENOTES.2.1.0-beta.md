@@ -287,7 +287,7 @@ Document MR Binary Compatibility vis-a-vis hadoop-1 and hadoop-2 for end-users.
 
 ---
 
-* [MAPREDUCE-5156](https://issues.apache.org/jira/browse/MAPREDUCE-5156) | *Blocker* | **Hadoop-examples-1.x.x.jar cannot run on Yarn**
+* [MAPREDUCE-5156](https://issues.apache.org/jira/browse/MAPREDUCE-5156) | *Blocker* | **Hadoop-examples-1.x.x.jar cannot run on YARN**
 
 **WARNING: No release note provided for this incompatible change.**
 
@@ -518,7 +518,7 @@ Makes Gridmix use the uncompressed input data size while simulating map tasks in
 
 ---
 
-* [YARN-787](https://issues.apache.org/jira/browse/YARN-787) | *Blocker* | **Remove resource min from Yarn client API**
+* [YARN-787](https://issues.apache.org/jira/browse/YARN-787) | *Blocker* | **Remove resource min from YARN client API**
 
 **WARNING: No release note provided for this incompatible change.**
 

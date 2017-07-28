@@ -702,7 +702,7 @@ Resource limits are now expressed and enforced in terms of physical memory, rath
 
 * [MAPREDUCE-3186](https://issues.apache.org/jira/browse/MAPREDUCE-3186) | *Blocker* | **User jobs are getting hanged if the Resource manager process goes down and comes up while job is getting executed.**
 
-New Yarn configuration property:
+New YARN configuration property:
 
 Name: yarn.app.mapreduce.am.scheduler.connection.retries
 Description: Number of times AM should retry to contact RM if connection is lost.
