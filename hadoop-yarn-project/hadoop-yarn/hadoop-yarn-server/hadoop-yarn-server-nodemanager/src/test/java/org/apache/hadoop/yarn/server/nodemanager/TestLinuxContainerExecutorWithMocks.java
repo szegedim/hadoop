@@ -24,11 +24,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.FileReader;
@@ -72,10 +67,16 @@ import org.junit.Assert;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static org.mockito.Matchers.anyList;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
 
 public class TestLinuxContainerExecutorWithMocks {
 
@@ -91,6 +92,8 @@ public class TestLinuxContainerExecutorWithMocks {
 
   private String tmpMockExecutor;
   private LinuxContainerExecutor mockExec = null;
+  private LinuxContainerExecutor mockExecMockRuntime = null;
+  private PrivilegedOperationExecutor mockPriviligedExec;
   private final File mockParamFile = new File("./params.txt");
   private LocalDirsHandlerService dirsHandler;
   
@@ -140,22 +143,28 @@ public class TestLinuxContainerExecutorWithMocks {
 
     Configuration conf = new YarnConfiguration();
     LinuxContainerRuntime linuxContainerRuntime;
+    LinuxContainerRuntime mockLinuxContainerRuntime;
 
     setupMockExecutor(MOCK_EXECUTOR, conf);
     linuxContainerRuntime = new DefaultLinuxContainerRuntime(
         PrivilegedOperationExecutor.getInstance(conf));
+    mockPriviligedExec = Mockito.mock(PrivilegedOperationExecutor.class);
+    mockLinuxContainerRuntime = new DefaultLinuxContainerRuntime(
+        mockPriviligedExec);
     dirsHandler = new LocalDirsHandlerService();
     dirsHandler.init(conf);
     linuxContainerRuntime.initialize(conf);
     mockExec = new LinuxContainerExecutor(linuxContainerRuntime);
     mockExec.setConf(conf);
+    mockExecMockRuntime = new LinuxContainerExecutor(mockLinuxContainerRuntime);
+    mockExecMockRuntime.setConf(conf);
   }
 
   @After
   public void tearDown() {
     deleteMockParamFile();
   }
-  
+
   @Test
   public void testContainerLaunch()
       throws IOException, ConfigurationException {
@@ -168,6 +177,7 @@ public class TestLinuxContainerExecutorWithMocks {
     ContainerId cId = mock(ContainerId.class);
     ContainerLaunchContext context = mock(ContainerLaunchContext.class);
     HashMap<String, String> env = new HashMap<String,String>();
+    env.put("FROM_CLIENT", "1");
     
     when(container.getContainerId()).thenReturn(cId);
     when(container.getLaunchContext()).thenReturn(context);
@@ -604,5 +614,56 @@ public class TestLinuxContainerExecutorWithMocks {
       assertTrue("Unexpected exception " + e,
           e.getMessage().contains("exit code"));
     }
+  }
+
+  @Test
+  public void testContainerLaunchEnvironment()
+      throws IOException, ConfigurationException,
+      PrivilegedOperationException {
+    String appSubmitter = "nobody";
+    String cmd = String.valueOf(
+        PrivilegedOperation.RunAsUserCommand.LAUNCH_CONTAINER.getValue());
+    String appId = "APP_ID";
+    String containerId = "CONTAINER_ID";
+    Container container = mock(Container.class);
+    ContainerId cId = mock(ContainerId.class);
+    ContainerLaunchContext context = mock(ContainerLaunchContext.class);
+    HashMap<String, String> env = new HashMap<String,String>();
+    env.put("FROM_CLIENT", "1");
+
+    when(container.getContainerId()).thenReturn(cId);
+    when(container.getLaunchContext()).thenReturn(context);
+
+    when(cId.toString()).thenReturn(containerId);
+
+    when(context.getEnvironment()).thenReturn(env);
+
+    Path scriptPath = new Path("file:///bin/echo");
+    Path tokensPath = new Path("file:///dev/null");
+    Path workDir = new Path("/tmp");
+    Path pidFile = new Path(workDir, "pid.txt");
+
+    mockExecMockRuntime.activateContainer(cId, pidFile);
+    int ret = mockExecMockRuntime.launchContainer(new ContainerStartContext.Builder()
+        .setContainer(container)
+        .setNmPrivateContainerScriptPath(scriptPath)
+        .setNmPrivateTokensPath(tokensPath)
+        .setUser(appSubmitter)
+        .setAppId(appId)
+        .setContainerWorkDir(workDir)
+        .setLocalDirs(dirsHandler.getLocalDirs())
+        .setLogDirs(dirsHandler.getLogDirs())
+        .setFilecacheDirs(new ArrayList<>())
+        .setUserLocalDirs(new ArrayList<>())
+        .setContainerLocalDirs(new ArrayList<>())
+        .setContainerLogDirs(new ArrayList<>())
+        .build());
+    ArgumentCaptor<PrivilegedOperation> opCaptor = ArgumentCaptor.forClass(
+        PrivilegedOperation.class);
+    // Verify that
+    verify(mockPriviligedExec, times(1))
+        .executePrivilegedOperation(anyListOf(
+            String.class), opCaptor.capture(), any(
+            File.class), eq(null), eq(false), eq(false));
   }
 }

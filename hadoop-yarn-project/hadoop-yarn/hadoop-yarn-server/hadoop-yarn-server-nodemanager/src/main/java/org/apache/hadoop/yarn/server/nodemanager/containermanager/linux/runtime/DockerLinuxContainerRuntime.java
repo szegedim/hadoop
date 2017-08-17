@@ -546,7 +546,7 @@ public class DockerLinuxContainerRuntime implements LinuxContainerRuntime {
 
     try {
       privilegedOperationExecutor.executePrivilegedOperation(null,
-          launchOp, null, container.getLaunchContext().getEnvironment(),
+          launchOp, null, null,
           false, false);
     } catch (PrivilegedOperationException e) {
       LOG.warn("Launch container failed. Exception: ", e);
@@ -560,7 +560,6 @@ public class DockerLinuxContainerRuntime implements LinuxContainerRuntime {
   @Override
   public void signalContainer(ContainerRuntimeContext ctx)
       throws ContainerExecutionException {
-    Container container = ctx.getContainer();
     ContainerExecutor.Signal signal = ctx.getExecutionAttribute(SIGNAL);
 
     PrivilegedOperation privOp = null;
@@ -591,7 +590,7 @@ public class DockerLinuxContainerRuntime implements LinuxContainerRuntime {
 
     try {
       privilegedOperationExecutor.executePrivilegedOperation(null,
-          privOp, null, container.getLaunchContext().getEnvironment(),
+          privOp, null, null,
           false, false);
     } catch (PrivilegedOperationException e) {
       throw new ContainerExecutionException("Signal container failed", e
@@ -620,7 +619,7 @@ public class DockerLinuxContainerRuntime implements LinuxContainerRuntime {
       privOp.appendArgs(commandFile);
       String output = privilegedOperationExecutor
           .executePrivilegedOperation(null, privOp, null,
-              container.getLaunchContext().getEnvironment(), true, false);
+              null, true, false);
       LOG.info("Docker inspect output for " + containerId + ": " + output);
       int index = output.lastIndexOf(',');
       if (index == -1) {
