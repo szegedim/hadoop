@@ -59,6 +59,12 @@ public class TestCompareResourceCalculators {
       throw new YarnException("Cannot access cgroups", e);
     }
     Assume.assumeNotNull(module);
+    Assume.assumeNotNull(
+        ResourceHandlerModule.getCGroupsHandler()
+            .getControllerPath(CGroupsHandler.CGroupController.CPU));
+    Assume.assumeNotNull(
+        ResourceHandlerModule.getCGroupsHandler()
+            .getControllerPath(CGroupsHandler.CGroupController.MEMORY));
 
     Random random = new Random(System.currentTimeMillis());
     cgroup = Long.toString(random.nextLong());
@@ -108,7 +114,7 @@ public class TestCompareResourceCalculators {
     // can report a small amount after process stop
     // This is not an issue since the cgroup is deleted
     if (pmem1 >= 0) {
-      Assert.assertTrue("pmem Error outside range",
+      Assert.assertTrue("pmem Error outside range " + pmem1 + " " + pmem2,
               Math.abs(pmem1 - (pmem2 - SHMEM_KB * 1024)) < 5000000);
     }
     long vmem1 = metric1.getRssMemorySize(0);
@@ -117,7 +123,7 @@ public class TestCompareResourceCalculators {
       // can report a small amount after process stop
       // This is not an issue since the cgroup is deleted
     if (vmem1 >= 0) {
-      Assert.assertTrue("vmem Error outside range",
+      Assert.assertTrue("vmem Error outside range " + vmem1 + " " + vmem2,
               Math.abs(vmem1 - (vmem2 - SHMEM_KB * 1024)) < 5000000);
     }
     float cpu1 = metric1.getCpuUsagePercent();

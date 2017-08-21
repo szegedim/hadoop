@@ -205,7 +205,7 @@ public class ResourceHandlerModule {
   }
 
   public static OutboundBandwidthResourceHandler
-    initOutboundBandwidthResourceHandler(Configuration conf)
+      initOutboundBandwidthResourceHandler(Configuration conf)
       throws ResourceHandlerException {
     return getTrafficControlBandwidthHandler(conf);
   }
