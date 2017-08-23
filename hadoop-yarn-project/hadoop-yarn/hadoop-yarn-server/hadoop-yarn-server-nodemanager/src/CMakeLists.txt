@@ -129,3 +129,9 @@ add_executable(cetest
         main/native/container-executor/test/test_util.cc)
 target_link_libraries(cetest gtest)
 output_directory(cetest test)
+
+add_executable(oomlistener
+    main/native/oomlistener/impl/oom_listener.c
+)
+
+output_directory(oomlistener target/usr/local/bin)
