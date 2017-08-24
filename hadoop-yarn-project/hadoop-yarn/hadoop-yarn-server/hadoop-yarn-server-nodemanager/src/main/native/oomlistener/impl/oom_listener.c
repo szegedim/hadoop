@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -42,7 +43,7 @@ typedef struct _descriptors {
   char oom_command[25];
   int oom_command_len;
 } __descriptors;
-struct _descriptors descriptors = {-1, -1, -1, {0}, {0}, 0};
+struct _descriptors descriptors = {-1, -1, -1, {0}, {0}, {0}, 0};
 
 /*
  Clean up allocated resources
@@ -58,11 +59,11 @@ void cleanup() {
 */
 void error_and_exit(const char* file, const char *message,
                     ...) {
+  fprintf(stderr, "%s ", file);
   va_list arguments;
-  va_start( arguments, message );
-  fprintf(stderr, "%s", file);
-  fprintf(stderr, message, arguments );
-  va_end( arguments );
+  va_start(arguments, message);
+  vfprintf(stderr, message, arguments);
+  va_end(arguments);
   cleanup();
   exit(EXIT_FAILURE);
 }
@@ -82,12 +83,10 @@ void print_usage(void) {
  oomlistener <cgroup>
 */
 int main(int argc, char *argv[]) {
-  int ret;
-
   if (argc != 2)
-    usage();
+    print_usage();
 
-  if ((descriptors.event_fd = eventfd(0,0)) == -1) {
+  if ((descriptors.event_fd = eventfd(0, 0)) == -1) {
     error_and_exit(argv[0], "eventfd() failed. errno:%d\n",
                    errno);
   }
@@ -122,7 +121,7 @@ int main(int argc, char *argv[]) {
                                        descriptors.oom_command,
                                        sizeof(descriptors.oom_command),
                                        "%d %d",
-                                       descriptors.event_control_fd,
+                                       descriptors.event_fd,
                                        descriptors.oom_control_fd)) < 0) {
     error_and_exit(argv[0], "Could print %d %d\n",
                    descriptors.event_control_fd,
@@ -134,19 +133,18 @@ int main(int argc, char *argv[]) {
             descriptors.oom_command_len) == -1) {
   }
 
-  int efd, cfd, ofd, rb, wb;
-  uint64_t u;
-
-
   if (close(descriptors.event_control_fd) == -1) {
     error_and_exit(argv[0], "Could not close %s errno:%d\n",
                    descriptors.event_control_path, errno);
   }
+  descriptors.event_control_fd = -1;
 
   for (;;) {
-    if (read(efd, &u, sizeof(uint64_t)) != sizeof(uint64_t)) {
+    uint64_t u;
+    int ret = 0;
+    if ((ret = read(descriptors.event_fd, &u, sizeof(u))) != sizeof(u)) {
       error_and_exit(argv[0],
-                     "Could not read from eventfd errno:%d\n", errno);
+                     "Could not read from eventfd %d errno:%d\n", ret, errno);
     }
 
     printf("oom\n");
