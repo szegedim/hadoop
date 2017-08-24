@@ -50,8 +50,11 @@ struct _descriptors descriptors = {-1, -1, -1, {0}, {0}, {0}, 0};
 */
 void cleanup() {
   close(descriptors.event_fd);
+  descriptors.event_fd = -1;
   close(descriptors.event_control_fd);
+  descriptors.event_control_fd = -1;
   close(descriptors.oom_control_fd);
+  descriptors.oom_control_fd = -1;
 }
 
 /*
@@ -87,8 +90,8 @@ int main(int argc, char *argv[]) {
     print_usage();
 
   if ((descriptors.event_fd = eventfd(0, 0)) == -1) {
-    error_and_exit(argv[0], "eventfd() failed. errno:%d\n",
-                   errno);
+    error_and_exit(argv[0], "eventfd() failed. errno:%d %s\n",
+                   errno, strerror(errno));
   }
 
   if (snprintf(descriptors.event_control_path,
@@ -100,8 +103,9 @@ int main(int argc, char *argv[]) {
   if ((descriptors.event_control_fd = open(
                                         descriptors.event_control_path,
                                         O_WRONLY)) == -1) {
-    error_and_exit(argv[0], "Could not open %s. errno:%d\n",
-                   descriptors.event_control_path, errno);
+    error_and_exit(argv[0], "Could not open %s. errno:%d %s\n",
+                   descriptors.event_control_path,
+                   errno, strerror(errno));
   }
 
   if (snprintf(descriptors.oom_control_path,
@@ -113,8 +117,9 @@ int main(int argc, char *argv[]) {
   if ((descriptors.oom_control_fd = open(
                                       descriptors.oom_control_path,
                                       O_RDONLY)) == -1) {
-    error_and_exit(argv[0], "Could not open %s. errno:%d\n",
-                   descriptors.oom_control_path, errno);
+    error_and_exit(argv[0], "Could not open %s. errno:%d %s\n",
+                   descriptors.oom_control_path,
+                   errno, strerror(errno));
   }
 
   if ((descriptors.oom_command_len = snprintf(
@@ -142,12 +147,20 @@ int main(int argc, char *argv[]) {
   for (;;) {
     uint64_t u;
     int ret = 0;
+    struct stat stat_buffer = {0};
+
     if ((ret = read(descriptors.event_fd, &u, sizeof(u))) != sizeof(u)) {
       error_and_exit(argv[0],
-                     "Could not read from eventfd %d errno:%d\n", ret, errno);
+                     "Could not read from eventfd %d errno:%d %s\n", ret,
+                     errno, strerror(errno));
     }
 
-    printf("oom\n");
+    printf("oom %ld\n", u);
+    if (stat(argv[1], &stat_buffer) != 0) {
+      error_and_exit(argv[0],
+                     "Path deteled: %s errno:%d %s\n", argv[1],
+                     errno, strerror(errno));
+    }
   }
 
   cleanup();
