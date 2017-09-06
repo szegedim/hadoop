@@ -80,7 +80,9 @@ public class TestCompareResourceCalculators {
   }
 
 
+  // Ignored in automated tests due to flakiness by design
   @Test
+  @Ignore
   public void testCompareResults()
       throws YarnException, InterruptedException, IOException {
 

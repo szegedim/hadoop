@@ -49,6 +49,7 @@ public class TestCGroupsResourceCalculator {
     CGroupsResourceCalculator calculator =
         new CGroupsResourceCalculator(
             "1234", ".", cGroupsHandler, clock);
+    calculator.setCGroupFilePaths();
     Assert.assertEquals("Expected exception", null, calculator);
   }
 
@@ -66,6 +67,7 @@ public class TestCGroupsResourceCalculator {
           new CGroupsResourceCalculator(
               "1234", basePath,
               cGroupsHandler, clock);
+      calculator.setCGroupFilePaths();
       Assert.assertEquals("Expected exception", null, calculator);
     } finally {
       FileUtils.deleteDirectory(new File(basePath));
@@ -88,6 +90,7 @@ public class TestCGroupsResourceCalculator {
           new CGroupsResourceCalculator(
               "1234", basePath,
               cGroupsHandler, clock);
+      calculator.setCGroupFilePaths();
       Assert.assertEquals("cgroups should be missing",
           (long)ResourceCalculatorProcessTree.UNAVAILABLE,
           calculator.getRssMemorySize(0));
@@ -124,6 +127,7 @@ public class TestCGroupsResourceCalculator {
           new CGroupsResourceCalculator(
               "1234", basePath,
               cGroupsHandler, clock);
+      calculator.setCGroupFilePaths();
       Assert.assertEquals("Incorrect CPU usage",
           90470,
           calculator.getCumulativeCpuTime());
@@ -162,6 +166,7 @@ public class TestCGroupsResourceCalculator {
           new CGroupsResourceCalculator(
               "1234", basePath,
               cGroupsHandler, clock);
+      calculator.setCGroupFilePaths();
 
       // Test the case where memsw is not available (Ubuntu)
       Assert.assertEquals("Incorrect memory usage",
@@ -202,6 +207,7 @@ public class TestCGroupsResourceCalculator {
           new CGroupsResourceCalculator(
               null, basePath,
               cGroupsHandler, clock);
+      calculator.setCGroupFilePaths();
       Assert.assertEquals("Incorrect CPU usage",
           90470,
           calculator.getCumulativeCpuTime());
@@ -236,6 +242,7 @@ public class TestCGroupsResourceCalculator {
           new CGroupsResourceCalculator(
               null, basePath,
               cGroupsHandler, clock);
+      calculator.setCGroupFilePaths();
 
       // Test the case where memsw is not available (Ubuntu)
       Assert.assertEquals("Incorrect memory usage",

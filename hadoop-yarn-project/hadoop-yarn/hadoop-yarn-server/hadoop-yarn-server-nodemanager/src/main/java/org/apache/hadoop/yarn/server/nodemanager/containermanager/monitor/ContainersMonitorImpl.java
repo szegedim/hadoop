@@ -583,8 +583,12 @@ public class ContainersMonitorImpl extends AbstractService implements
       // CGroups is best in performance, so try to use it, if it is enabled
       if (processTreeClass == null &&
           CGroupsResourceCalculator.isAvailable()) {
+        // Use final to avoid inconsistency in case of an exception
+        CGroupsResourceCalculator cg =
+            new CGroupsResourceCalculator(pId);
         try {
-          pt = new CGroupsResourceCalculator(pId);
+          cg.setCGroupFilePaths();
+          pt = cg;
         } catch (YarnException e) {
           LOG.info("CGroupsResourceCalculator cannot be created", e);
         }

@@ -78,9 +78,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
 
   /**
    * Create resource calculator for all Yarn containers.
-   * @throws YarnException Could not access cgroups
    */
-  public CGroupsResourceCalculator() throws YarnException {
+  public CGroupsResourceCalculator() {
     this(null, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
         SystemClock.getInstance());
   }
@@ -88,9 +87,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   /**
    * Create resource calculator for the container that has the specified pid.
    * @param pid A pid from the cgroup or null for all containers
-   * @throws YarnException Could not access cgroups
    */
-  public CGroupsResourceCalculator(String pid) throws YarnException {
+  public CGroupsResourceCalculator(String pid) {
     this(pid, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
         SystemClock.getInstance());
   }
@@ -101,12 +99,10 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    * @param procfsDir Path to /proc or a mock /proc directory
    * @param cGroupsHandler Initialized cgroups handler object
    * @param clock A clock object
-   * @throws YarnException YarnException Could not access cgroups
    */
   @VisibleForTesting
   CGroupsResourceCalculator(String pid, String procfsDir,
-                            CGroupsHandler cGroupsHandler, Clock clock)
-      throws YarnException {
+                            CGroupsHandler cGroupsHandler, Clock clock) {
     super(pid);
     this.procfsDir = procfsDir;
     this.cGroupsHandler = cGroupsHandler;
@@ -116,7 +112,6 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     this.cpuTimeTracker =
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
-    setCGroupFilePaths();
   }
 
   @Override
@@ -323,7 +318,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     }
   }
 
-  private void setCGroupFilePaths() throws YarnException {
+  public void setCGroupFilePaths() throws YarnException {
     if (cGroupsHandler == null) {
       throw new YarnException("CGroups handler is not initialized");
     }
