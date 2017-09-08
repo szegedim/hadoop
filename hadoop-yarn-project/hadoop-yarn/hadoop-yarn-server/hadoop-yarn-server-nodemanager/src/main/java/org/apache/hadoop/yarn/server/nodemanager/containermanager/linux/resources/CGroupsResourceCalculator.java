@@ -107,6 +107,9 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     this.procfsDir = procfsDir;
     this.cGroupsHandler = cGroupsHandler;
     this.pid = pid;
+    // In case of a unit test we do not have system clock,
+    // and it might not run on Linux, so let's hard code
+    // the value to 10 in that case.
     this.jiffyLengthMs = (clock == SystemClock.getInstance()) ?
         SysInfoLinux.JIFFY_LENGTH_IN_MILLIS : 10;
     this.cpuTimeTracker =

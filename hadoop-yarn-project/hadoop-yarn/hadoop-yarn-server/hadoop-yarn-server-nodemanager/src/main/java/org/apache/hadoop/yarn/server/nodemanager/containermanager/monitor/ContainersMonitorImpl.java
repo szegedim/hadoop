@@ -589,6 +589,7 @@ public class ContainersMonitorImpl extends AbstractService implements
         try {
           cg.setCGroupFilePaths();
           pt = cg;
+          LOG.info("Using CGroupsResourceCalculator");
         } catch (YarnException e) {
           LOG.info("CGroupsResourceCalculator cannot be created", e);
         }
