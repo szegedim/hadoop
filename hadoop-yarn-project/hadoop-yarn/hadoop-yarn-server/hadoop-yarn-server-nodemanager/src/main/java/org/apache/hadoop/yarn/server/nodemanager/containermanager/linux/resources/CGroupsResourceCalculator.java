@@ -144,7 +144,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   @Override
   public long getRssMemorySize(int olderThanAge) {
     if (olderThanAge > 1) {
-      return 0;
+      return UNAVAILABLE;
     }
     return getMemorySize(memStat);
   }
@@ -152,7 +152,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   @Override
   public long getVirtualMemorySize(int olderThanAge) {
     if (olderThanAge > 1) {
-      return 0;
+      return UNAVAILABLE;
     }
     return getMemorySize(memswStat);
   }
