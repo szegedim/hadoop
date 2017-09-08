@@ -123,10 +123,11 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
       cpuTimeTracker.updateElapsedJiffies(
           readTotalProcessJiffies(),
           clock.getTime());
+      return cpuTimeTracker.getCpuTrackerUsagePercent();
     } catch (YarnException e) {
       LOG.debug(e.getMessage());
+      return 0;
     }
-    return cpuTimeTracker.getCpuTrackerUsagePercent();
   }
 
   @Override

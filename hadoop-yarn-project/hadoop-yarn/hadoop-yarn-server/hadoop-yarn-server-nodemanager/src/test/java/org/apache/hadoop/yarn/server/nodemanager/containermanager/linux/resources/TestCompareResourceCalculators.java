@@ -39,7 +39,7 @@ public class TestCompareResourceCalculators {
   private String cgroup = null;
   private String cgroupCPU = null;
   private String cgroupMemory = null;
-  public static final long SHMEM_KB = 1048576;
+  public static final long SHMEM_KB = 100 * 1024;
 
   @Before
   public void setup() throws IOException, YarnException {
@@ -82,7 +82,6 @@ public class TestCompareResourceCalculators {
 
   // Ignored in automated tests due to flakiness by design
   @Test
-  @Ignore
   public void testCompareResults()
       throws YarnException, InterruptedException, IOException {
 
@@ -92,6 +91,7 @@ public class TestCompareResourceCalculators {
         new ProcfsBasedProcessTree(Long.toString(getPid()));
     CGroupsResourceCalculator cgroupsCalculator =
         new CGroupsResourceCalculator(Long.toString(getPid()));
+    cgroupsCalculator.setCGroupFilePaths();
 
     for (int i = 0; i < 5; ++i) {
       Thread.sleep(3000);
@@ -99,10 +99,32 @@ public class TestCompareResourceCalculators {
     }
 
     stopTestProcess();
-    for (int i = 0; i < 2; ++i) {
-      Thread.sleep(3000);
-      compareMetrics(legacyCalculator, cgroupsCalculator);
-    }
+
+    ensureCleanedUp(legacyCalculator, cgroupsCalculator);
+  }
+
+  private void ensureCleanedUp(
+          ResourceCalculatorProcessTree metric1,
+          ResourceCalculatorProcessTree metric2) {
+    metric1.updateProcessTree();
+    metric2.updateProcessTree();
+    long pmem1 = metric1.getRssMemorySize(0);
+    long pmem2 = metric2.getRssMemorySize(0);
+    System.out.println(pmem1 + " " + pmem2);
+    Assert.assertTrue("pmem should be invalid " + pmem1 + " " + pmem2,
+            pmem1 == ResourceCalculatorProcessTree.UNAVAILABLE &&
+                    pmem2 == ResourceCalculatorProcessTree.UNAVAILABLE);
+    long vmem1 = metric1.getRssMemorySize(0);
+    long vmem2 = metric2.getRssMemorySize(0);
+    System.out.println(vmem1 + " " + vmem2);
+    Assert.assertTrue("vmem Error outside range " + vmem1 + " " + vmem2,
+            vmem1 == ResourceCalculatorProcessTree.UNAVAILABLE &&
+                    vmem2 == ResourceCalculatorProcessTree.UNAVAILABLE);
+    float cpu1 = metric1.getCpuUsagePercent();
+    float cpu2 = metric2.getCpuUsagePercent();
+    // TODO ProcfsBasedProcessTree may report negative on process exit
+    Assert.assertTrue("CPU% Error outside range " + cpu1 + " " + cpu2,
+            cpu1 == 0 && cpu2 == 0);
   }
 
   private void compareMetrics(
@@ -115,19 +137,17 @@ public class TestCompareResourceCalculators {
     // TODO The calculation is different and cgroup
     // can report a small amount after process stop
     // This is not an issue since the cgroup is deleted
-    if (pmem1 >= 0) {
+    System.out.println(pmem1 + " " + (pmem2 - SHMEM_KB * 1024));
       Assert.assertTrue("pmem Error outside range " + pmem1 + " " + pmem2,
               Math.abs(pmem1 - (pmem2 - SHMEM_KB * 1024)) < 5000000);
-    }
     long vmem1 = metric1.getRssMemorySize(0);
     long vmem2 = metric2.getRssMemorySize(0);
-      // TODO The calculation is different and cgroup
-      // can report a small amount after process stop
-      // This is not an issue since the cgroup is deleted
-    if (vmem1 >= 0) {
+    System.out.println(vmem1 + " " + (vmem2 - SHMEM_KB * 1024));
+    // TODO The calculation is different and cgroup
+    // can report a small amount after process stop
+    // This is not an issue since the cgroup is deleted
       Assert.assertTrue("vmem Error outside range " + vmem1 + " " + vmem2,
               Math.abs(vmem1 - (vmem2 - SHMEM_KB * 1024)) < 5000000);
-    }
     float cpu1 = metric1.getCpuUsagePercent();
     float cpu2 = metric2.getCpuUsagePercent();
     if (cpu1 > 0) {
