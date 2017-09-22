@@ -103,54 +103,45 @@ public class TestNMClient {
       implements ContainerStateTransitionListener {
     private static final Log LOG =
         LogFactory.getLog(DebugSumContainerStateListener.class);
-    private Map<ContainerId, Map<org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState, Long>>
+    private Map<ContainerId,
+        Map<org.apache.hadoop.yarn.server.nodemanager.containermanager
+            .container.ContainerState, Long>>
         transitionCounter = new HashMap<>();
-    private static DebugSumContainerStateListener singleton = null;
 
     public DebugSumContainerStateListener() {
-      // Currently this is not needed to be thread safe
-      if (singleton == null) {
-        singleton = this;
-      }
-    }
-
-    /**
-     * Return singleton instance.
-     * @return return the single object created of this class
-     */
-    public static DebugSumContainerStateListener getSingleton() {
-      return singleton;
     }
 
     @Override
-    public void init(Context context) {}
+    public void init(Context context) {
+    }
 
     @Override
-    public void preTransition(ContainerImpl op, org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState beforeState,
-                              ContainerEvent eventToBeProcessed) {}
+    public void preTransition(ContainerImpl op,
+                              org.apache.hadoop.yarn.server.nodemanager
+                                  .containermanager.container.ContainerState
+                                  beforeState,
+                              ContainerEvent eventToBeProcessed) {
+    }
 
     @Override
-    public void postTransition(
+    public synchronized void postTransition(
         ContainerImpl op,
-        org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState beforeState,
-        org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState afterState,
+        org.apache.hadoop.yarn.server.nodemanager.containermanager.container
+            .ContainerState beforeState,
+        org.apache.hadoop.yarn.server.nodemanager.containermanager.container
+            .ContainerState afterState,
         ContainerEvent processedEvent) {
-      if (singleton != this) {
-        singleton.postTransition(op, beforeState, afterState, processedEvent);
-      } else {
-        synchronized (this) {
-          if (beforeState != afterState) {
-            transitionCounter
-                .putIfAbsent(op.getContainerId(), new HashMap<>());
-            long sum = transitionCounter.get(op.getContainerId())
-                .compute(afterState,
-                    (state, count) -> count == null ? 1 : count + 1);
-            LOG.info("***** " + op.getContainerId() +
-                " Transition from " + beforeState +
-                " to " + afterState +
-                "sum:" + sum);
-          }
-        }
+      if (beforeState != afterState) {
+        ContainerId id = op.getContainerId();
+        transitionCounter
+            .putIfAbsent(id, new HashMap<>());
+        long sum = transitionCounter.get(id)
+            .compute(afterState,
+                (state, count) -> count == null ? 1 : count + 1);
+        LOG.info("***** " + id +
+            " Transition from " + beforeState +
+            " to " + afterState +
+            "sum:" + sum);
       }
     }
 
@@ -161,11 +152,55 @@ public class TestNMClient {
      * @param state Return the overall number of transitions to this state
      * @return Number of transitions to the state specified
      */
-    public synchronized long getTransitionCounter(
-        ContainerId id, org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState state) {
-      Long ret = singleton.transitionCounter.getOrDefault(id, new HashMap<>())
+    synchronized long getTransitionCounter(
+        ContainerId id,
+        org.apache.hadoop.yarn.server.nodemanager.containermanager.container
+            .ContainerState state) {
+      Long ret = transitionCounter.getOrDefault(id, new HashMap<>())
           .get(state);
       return ret != null ? ret : 0;
+    }
+  }
+
+  /**
+   * Container State transition listener to debug the sum of transitions.
+   */
+  public static class DebugSumContainerStateListenerProxy
+      implements ContainerStateTransitionListener {
+
+    private static DebugSumContainerStateListener singleton =
+        new DebugSumContainerStateListener();
+
+    @Override
+    public void init(Context context) {
+    }
+
+    @Override
+    public void preTransition(ContainerImpl op,
+                              org.apache.hadoop.yarn.server.nodemanager
+                                  .containermanager.container.ContainerState
+                                  beforeState,
+                              ContainerEvent eventToBeProcessed) {
+    }
+
+    @Override
+    public void postTransition(
+        ContainerImpl op,
+        org.apache.hadoop.yarn.server.nodemanager.containermanager.container
+            .ContainerState beforeState,
+        org.apache.hadoop.yarn.server.nodemanager.containermanager.container
+            .ContainerState afterState,
+        ContainerEvent processedEvent) {
+      singleton.postTransition(op, beforeState, afterState, processedEvent);
+    }
+
+    /**
+     * Return singleton instance.
+     *
+     * @return return the single object created of this class
+     */
+    static DebugSumContainerStateListener getSingleton() {
+      return singleton;
     }
   }
 
@@ -175,7 +210,7 @@ public class TestNMClient {
     conf = new YarnConfiguration();
     // Turn on state tracking
     conf.set(YarnConfiguration.NM_CONTAINER_STATE_TRANSITION_LISTENERS,
-        DebugSumContainerStateListener.class.getName());
+        DebugSumContainerStateListenerProxy.class.getName());
     yarnCluster =
         new MiniYARNCluster(TestAMRMClient.class.getName(), nodeCount, 1, 1);
     yarnCluster.init(conf);
@@ -461,22 +496,22 @@ public class TestNMClient {
       } catch (YarnException e) {
         throw new AssertionError("Exception is not expected ", e);
       }
-      List<Integer> array = Collections.singletonList(-1000);
+      List<Integer> exitStatuses = Collections.singletonList(-1000);
 
       // leave one container unclosed
       if (++i < size) {
-        testContainer(client, i, container, clc, array);
+        testContainer(client, i, container, clc, exitStatuses);
 
       }
     }
   }
 
   private void testContainer(NMClientImpl client, int i, Container container,
-                             ContainerLaunchContext clc, List<Integer> array)
+                             ContainerLaunchContext clc, List<Integer> exitCode)
       throws YarnException, IOException {
     // NodeManager may still need some time to make the container started
     testGetContainerStatus(container, i, ContainerState.RUNNING, "",
-        array);
+        exitCode);
     waitForContainerTransitionCount(container,
         org.apache.hadoop.yarn.server.nodemanager.
             containermanager.container.ContainerState.RUNNING, 1);
@@ -485,7 +520,7 @@ public class TestNMClient {
 
     testRestartContainer(container.getId());
     testGetContainerStatus(container, i, ContainerState.RUNNING,
-        "will be Restarted", array);
+        "will be Restarted", exitCode);
     waitForContainerTransitionCount(container,
         org.apache.hadoop.yarn.server.nodemanager.
             containermanager.container.ContainerState.RUNNING, 2);
@@ -493,14 +528,14 @@ public class TestNMClient {
     if (i % 2 == 0) {
       testReInitializeContainer(container.getId(), clc, false);
       testGetContainerStatus(container, i, ContainerState.RUNNING,
-          "will be Re-initialized", array);
+          "will be Re-initialized", exitCode);
       waitForContainerTransitionCount(container,
           org.apache.hadoop.yarn.server.nodemanager.
               containermanager.container.ContainerState.RUNNING, 3);
 
       testRollbackContainer(container.getId(), false);
       testGetContainerStatus(container, i, ContainerState.RUNNING,
-          "will be Rolled-back", array);
+          "will be Rolled-back", exitCode);
       waitForContainerTransitionCount(container,
           org.apache.hadoop.yarn.server.nodemanager.
               containermanager.container.ContainerState.RUNNING, 4);
@@ -508,7 +543,7 @@ public class TestNMClient {
       testCommitContainer(container.getId(), true);
       testReInitializeContainer(container.getId(), clc, false);
       testGetContainerStatus(container, i, ContainerState.RUNNING,
-          "will be Re-initialized", array);
+          "will be Re-initialized", exitCode);
       waitForContainerTransitionCount(container,
           org.apache.hadoop.yarn.server.nodemanager.
               containermanager.container.ContainerState.RUNNING, 5);
@@ -516,7 +551,7 @@ public class TestNMClient {
     } else {
       testReInitializeContainer(container.getId(), clc, true);
       testGetContainerStatus(container, i, ContainerState.RUNNING,
-          "will be Re-initialized", array);
+          "will be Re-initialized", exitCode);
       waitForContainerTransitionCount(container,
           org.apache.hadoop.yarn.server.nodemanager.
               containermanager.container.ContainerState.RUNNING, 3);
@@ -574,7 +609,7 @@ public class TestNMClient {
         }
       }
       DebugSumContainerStateListener listener =
-          DebugSumContainerStateListener.getSingleton();
+          DebugSumContainerStateListenerProxy.getSingleton();
       transitionCount = listener.getTransitionCounter(container.getId(), state);
     } while (transitionCount != transitions);
   }
