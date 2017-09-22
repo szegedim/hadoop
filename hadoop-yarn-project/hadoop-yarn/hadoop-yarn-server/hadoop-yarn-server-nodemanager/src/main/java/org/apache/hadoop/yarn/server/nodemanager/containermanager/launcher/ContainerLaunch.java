@@ -698,18 +698,20 @@ public class ContainerLaunch implements Callable<Integer> {
         // deactivateContainer above and did not start.
         // Since we already set the state to RUNNING or REINITIALIZING
         // we have to send a killed event to continue.
-        LOG.warn("Container clean up before pid file created "
-            + containerIdStr);
-        dispatcher.getEventHandler().handle(
-            new ContainerExitEvent(container.getContainerId(),
-                ContainerEventType.CONTAINER_KILLED_ON_REQUEST,
-                Shell.WINDOWS ? ExitCode.FORCE_KILLED.getExitCode() :
-                    ExitCode.TERMINATED.getExitCode(),
-                "Container terminated before pid file created."));
-        // There is a possibility that the launch grabbed the file name before
-        // the deactivateContainer above but it was slow enough to avoid
-        // getContainerPid. Increasing YarnConfiguration.NM_PROCESS_KILL_WAIT_MS
-        // reduces the likelihood of this race condition and process leak.
+        if (!completed.get()) {
+          LOG.warn("Container clean up before pid file created "
+              + containerIdStr);
+          dispatcher.getEventHandler().handle(
+              new ContainerExitEvent(container.getContainerId(),
+                  ContainerEventType.CONTAINER_KILLED_ON_REQUEST,
+                  Shell.WINDOWS ? ExitCode.FORCE_KILLED.getExitCode() :
+                      ExitCode.TERMINATED.getExitCode(),
+                  "Container terminated before pid file created."));
+          // There is a possibility that the launch grabbed the file name before
+          // the deactivateContainer above but it was slow enough to avoid
+          // getContainerPid. Increasing YarnConfiguration.NM_PROCESS_KILL_WAIT_MS
+          // reduces the likelihood of this race condition and process leak.
+        }
       }
     } catch (Exception e) {
       String message =
