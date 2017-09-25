@@ -97,7 +97,8 @@ public class TestNMClient {
   NMTokenCache nmTokenCache = null;
 
   /**
-   * Container State transition listener to debug the sum of transitions.
+   * Container State transition listener to track the number of times
+   * a container has transitioned into a state.
    */
   public static class DebugSumContainerStateListener
       implements ContainerStateTransitionListener {
