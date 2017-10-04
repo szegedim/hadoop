@@ -81,7 +81,7 @@ public class TestApplicationLifetimeMonitor {
         3000L);
   }
 
-  @Test(timeout = 60000)
+  @Test(timeout = 90000)
   public void testApplicationLifetimeMonitor() throws Exception {
     MockRM rm = null;
     try {
