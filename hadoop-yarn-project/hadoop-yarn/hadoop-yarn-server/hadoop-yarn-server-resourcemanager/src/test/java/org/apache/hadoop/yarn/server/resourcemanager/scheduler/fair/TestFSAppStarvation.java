@@ -62,6 +62,9 @@ public class TestFSAppStarvation extends FairSchedulerTestBase {
         ALLOC_FILE.getAbsolutePath());
     conf.setBoolean(FairSchedulerConfiguration.PREEMPTION, true);
     conf.setFloat(FairSchedulerConfiguration.PREEMPTION_THRESHOLD, 0f);
+    // This effectively disables the update thread since we call update
+    // explicitly on the main thread
+    conf.setLong(FairSchedulerConfiguration.UPDATE_INTERVAL_MS, 100000);
   }
 
   @After
@@ -124,16 +127,16 @@ public class TestFSAppStarvation extends FairSchedulerTestBase {
 
     // Wait for apps to be processed by MockPreemptionThread
     for (int i = 0; i < 6000; ++i) {
-      if(preemptionThread.totalAppsAdded() >
-          preemptionThread.uniqueAppsAdded()) {
+      if(preemptionThread.totalAppsAdded() >=
+          preemptionThread.uniqueAppsAdded() * 2) {
         break;
       }
       Thread.sleep(10);
     }
 
-    assertTrue("Each app is marked as starved exactly once",
-        preemptionThread.totalAppsAdded() >
-            preemptionThread.uniqueAppsAdded());
+    assertEquals("Each app is marked as starved exactly once",
+        preemptionThread.totalAppsAdded(),
+        preemptionThread.uniqueAppsAdded() * 2);
   }
 
   /*
