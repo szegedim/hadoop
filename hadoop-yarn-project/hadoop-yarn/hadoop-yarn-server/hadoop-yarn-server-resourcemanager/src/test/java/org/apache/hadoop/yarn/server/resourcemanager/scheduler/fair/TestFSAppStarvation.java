@@ -134,7 +134,8 @@ public class TestFSAppStarvation extends FairSchedulerTestBase {
       Thread.sleep(10);
     }
 
-    assertEquals("Each app is marked as starved exactly once",
+    assertEquals("Each app should be marked as starved once" +
+            " at each scheduler update above",
         preemptionThread.totalAppsAdded(),
         preemptionThread.uniqueAppsAdded() * 2);
   }
