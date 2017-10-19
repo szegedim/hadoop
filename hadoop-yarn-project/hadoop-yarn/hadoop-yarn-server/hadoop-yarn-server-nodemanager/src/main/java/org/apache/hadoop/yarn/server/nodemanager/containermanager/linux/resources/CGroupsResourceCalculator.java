@@ -106,7 +106,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     super(pid);
     this.procfsDir = procfsDir;
     this.cGroupsHandler = cGroupsHandler;
-    this.pid = pid;
+    this.pid = pid.equals("0") ? "1" : pid;
     // In case of a unit test we do not have system clock,
     // and it might not run on Linux, so let's hard code
     // the value to 10 in that case.
@@ -115,6 +115,11 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     this.cpuTimeTracker =
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
+    try {
+      setCGroupFilePaths();
+    } catch (YarnException e) {
+      LOG.error(e.getMessage(), e);
+    }
   }
 
   @Override
