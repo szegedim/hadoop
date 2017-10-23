@@ -223,9 +223,7 @@ public class ContainersMonitorImpl extends AbstractService implements
           .getClass().getName() + " is disabled.");
       return false;
     }
-    if (ResourceCalculatorProcessTree
-        .getResourceCalculatorProcessTree("0", processTreeClass, conf)
-        == null) {
+    if (getResourceCalculatorProcessTree("0") == null) {
       LOG.info("ResourceCalculatorProcessTree is unavailable on this system. "
           + this.getClass().getName() + " is disabled.");
       return false;
@@ -537,8 +535,7 @@ public class ContainersMonitorImpl extends AbstractService implements
             LOG.debug("Tracking ProcessTree " + pId + " for the first time");
           }
           ResourceCalculatorProcessTree pt =
-              getResourceCalculatorProcessTree(
-                  pId);
+              getResourceCalculatorProcessTree(pId);
           ptInfo.setPid(pId);
           ptInfo.setProcessTree(pt);
 
@@ -577,19 +574,16 @@ public class ContainersMonitorImpl extends AbstractService implements
      * @return process tree calculator
      */
     private ResourceCalculatorProcessTree
-        getResourceCalculatorProcessTree(String pId) {
+    getResourceCalculatorProcessTree(String pId) {
       ResourceCalculatorProcessTree pt = null;
 
       // CGroups is best in performance, so try to use it, if it is enabled
       if (processTreeClass == null &&
           CGroupsResourceCalculator.isAvailable()) {
         // Use final to avoid inconsistency in case of an exception
-        CGroupsResourceCalculator cg =
-            new CGroupsResourceCalculator(pId);
         try {
-          cg.setCGroupFilePaths();
-          pt = cg;
-          LOG.info("Using CGroupsResourceCalculator");
+          pt = new CGroupsResourceCalculator(pId);
+          LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
         } catch (YarnException e) {
           LOG.info("CGroupsResourceCalculator cannot be created", e);
         }
