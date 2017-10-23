@@ -217,6 +217,35 @@ public class ContainersMonitorImpl extends AbstractService implements
         YarnConfiguration.DEFAULT_NM_CONTAINER_MONITOR_ENABLED);
   }
 
+  /**
+   * Get the best process tree calculator.
+   * @param pId container process id
+   * @return process tree calculator
+   */
+  private ResourceCalculatorProcessTree
+  getResourceCalculatorProcessTree(String pId) {
+    ResourceCalculatorProcessTree pt = null;
+
+    // CGroups is best in performance, so try to use it, if it is enabled
+    if (processTreeClass == null &&
+        CGroupsResourceCalculator.isAvailable()) {
+      // Use final to avoid inconsistency in case of an exception
+      try {
+        pt = new CGroupsResourceCalculator(pId);
+        LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
+      } catch (YarnException e) {
+        LOG.info("CGroupsResourceCalculator cannot be created", e);
+      }
+    }
+
+    if (pt == null) {
+      pt = ResourceCalculatorProcessTree.
+          getResourceCalculatorProcessTree(
+              pId, processTreeClass, conf);
+    }
+    return pt;
+  }
+
   private boolean isResourceCalculatorAvailable() {
     if (resourceCalculatorPlugin == null) {
       LOG.info("ResourceCalculatorPlugin is unavailable on this system. " + this
@@ -566,35 +595,6 @@ public class ContainersMonitorImpl extends AbstractService implements
         }
       }
       // End of initializing any uninitialized processTrees
-    }
-
-    /**
-     * Get the best process tree calculator.
-     * @param pId container process id
-     * @return process tree calculator
-     */
-    private ResourceCalculatorProcessTree
-    getResourceCalculatorProcessTree(String pId) {
-      ResourceCalculatorProcessTree pt = null;
-
-      // CGroups is best in performance, so try to use it, if it is enabled
-      if (processTreeClass == null &&
-          CGroupsResourceCalculator.isAvailable()) {
-        // Use final to avoid inconsistency in case of an exception
-        try {
-          pt = new CGroupsResourceCalculator(pId);
-          LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
-        } catch (YarnException e) {
-          LOG.info("CGroupsResourceCalculator cannot be created", e);
-        }
-      }
-
-      if (pt == null) {
-        pt = ResourceCalculatorProcessTree.
-            getResourceCalculatorProcessTree(
-                pId, processTreeClass, conf);
-      }
-      return pt;
     }
 
     /**
