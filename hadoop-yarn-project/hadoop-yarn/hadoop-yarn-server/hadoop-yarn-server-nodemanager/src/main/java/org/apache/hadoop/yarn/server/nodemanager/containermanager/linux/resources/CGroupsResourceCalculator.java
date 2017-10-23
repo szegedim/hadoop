@@ -79,7 +79,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   /**
    * Create resource calculator for all Yarn containers.
    */
-  public CGroupsResourceCalculator() {
+  public CGroupsResourceCalculator()
+      throws YarnException {
     this(null, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
         SystemClock.getInstance());
   }
@@ -88,7 +89,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    * Create resource calculator for the container that has the specified pid.
    * @param pid A pid from the cgroup or null for all containers
    */
-  public CGroupsResourceCalculator(String pid) {
+  public CGroupsResourceCalculator(String pid)
+      throws YarnException {
     this(pid, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
         SystemClock.getInstance());
   }
@@ -102,7 +104,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    */
   @VisibleForTesting
   CGroupsResourceCalculator(String pid, String procfsDir,
-                            CGroupsHandler cGroupsHandler, Clock clock) {
+                            CGroupsHandler cGroupsHandler, Clock clock)
+      throws YarnException {
     super(pid);
     this.procfsDir = procfsDir;
     this.cGroupsHandler = cGroupsHandler;
@@ -115,11 +118,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     this.cpuTimeTracker =
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
-    try {
-      setCGroupFilePaths();
-    } catch (YarnException e) {
-      LOG.error(e.getMessage(), e);
-    }
+    setCGroupFilePaths();
   }
 
   @Override
@@ -282,7 +281,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
           String cgroup =
               new File(cgroupPath).toPath().getFileName().toString();
 
-          if (cgroup!=null && !cgroup.isEmpty()) {
+          if (cgroup!=null) {
             result[0] = cGroupsHandler.getRelativePathForCGroup(cgroup);
           } else {
             LOG.warn("Invalid cgroup path " + cgroupPath +
