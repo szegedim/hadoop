@@ -119,14 +119,14 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     this.cpuTimeTracker =
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
-    setCGroupFilePaths();
   }
 
   @Override
   public float getCpuUsagePercent() {
     try {
-      cpuTimeTracker.updateElapsedJiffies(
-          readTotalProcessJiffies(),
+      BigInteger processTotalJiffies = readTotalProcessJiffies();
+      LOG.debug("Process " + pid + " jiffies:" + processTotalJiffies);
+      cpuTimeTracker.updateElapsedJiffies(processTotalJiffies,
           clock.getTime());
       return cpuTimeTracker.getCpuTrackerUsagePercent();
     } catch (YarnException e) {
@@ -344,65 +344,4 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     memswStat = new File(memDir, MEMSW_STAT);
   }
 
-  public class CombinedResourceCalulator extends ResourceCalculatorProcessTree {
-    private ProcfsBasedProcessTree legacy;
-    private CGroupsResourceCalculator modern;
-
-    public CombinedResourceCalulator(String pid) {
-      super(pid);
-      legacy = new ProcfsBasedProcessTree(pid);
-      try {
-        modern = new CGroupsResourceCalculator(pid);
-      } catch (YarnException ex) {
-        LOG.error(ex.getMessage(), ex);
-      }
-    }
-
-    @Override
-    public void updateProcessTree() {
-
-    }
-
-    @Override
-    public String getProcessTreeDump() {
-      return null;
-    }
-
-    @Override
-    public float getCpuUsagePercent() {
-      float value1 = legacy.getCpuUsagePercent();
-      float value2 = modern.getCpuUsagePercent();
-      LOG.info("CPU Comparison:" + value1 + " " + value2);
-      LOG.info("Jiffy Comparison:" +
-          legacy.getCumulativeCpuTime() + " " + modern.getCumulativeCpuTime());
-
-      return value2;
-    }
-
-    @Override
-    public boolean checkPidPgrpidForMatch() {
-      return false;
-    }
-
-    @Override
-    public long getCumulativeCpuTime() {
-      return modern.getCumulativeCpuTime();
-    }
-
-    @Override
-    public long getRssMemorySize(int olderThanAge) {
-      LOG.info("MEM Comparison:" +
-          legacy.getRssMemorySize(olderThanAge) + " " +
-          modern.getRssMemorySize(olderThanAge));
-      return legacy.getRssMemorySize(olderThanAge);
-    }
-
-    @Override
-    public long getVirtualMemorySize(int olderThanAge) {
-      LOG.info("MEM Comparison:" +
-          legacy.getVirtualMemorySize(olderThanAge) + " " +
-          modern.getVirtualMemorySize(olderThanAge));
-      return legacy.getVirtualMemorySize(olderThanAge);
-    }
-  }
 }

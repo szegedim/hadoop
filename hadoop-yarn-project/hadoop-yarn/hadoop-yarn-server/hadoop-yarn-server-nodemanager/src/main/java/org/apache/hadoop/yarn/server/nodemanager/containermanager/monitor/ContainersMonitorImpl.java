@@ -223,18 +223,23 @@ public class ContainersMonitorImpl extends AbstractService implements
    * @return process tree calculator
    */
   private ResourceCalculatorProcessTree
-  getResourceCalculatorProcessTree(String pId) {
+      getResourceCalculatorProcessTree(String pId) {
     ResourceCalculatorProcessTree pt = null;
 
-    // CGroups is best in performance, so try to use it, if it is enabled
-    if (processTreeClass == null &&
-        CGroupsResourceCalculator.isAvailable()) {
-      // Use final to avoid inconsistency in case of an exception
-      try {
-        pt = new CGroupsResourceCalculator(pId);
-        LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
-      } catch (YarnException e) {
-        LOG.info("CGroupsResourceCalculator cannot be created", e);
+    // Check, if CGroups is configured
+    if (processTreeClass == CGroupsResourceCalculator.class) {
+      if (CGroupsResourceCalculator.isAvailable()) {
+        try {
+          final CGroupsResourceCalculator cg =
+              new CGroupsResourceCalculator(pId);
+          cg.setCGroupFilePaths();
+          pt = cg;
+          LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
+        } catch (YarnException e) {
+          LOG.info("CGroupsResourceCalculator cannot be created", e);
+        }
+      } else {
+        LOG.info("CGroupsResourceCalculator is not available");
       }
     }
 
