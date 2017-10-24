@@ -26,6 +26,7 @@ import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.SysInfoLinux;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.Clock;
+import org.apache.hadoop.yarn.util.ProcfsBasedProcessTree;
 import org.apache.hadoop.yarn.util.ResourceCalculatorProcessTree;
 import org.apache.hadoop.yarn.util.SystemClock;
 
@@ -341,5 +342,67 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     cpuStat = new File(cpuDir, CPU_STAT);
     memStat = new File(memDir, MEM_STAT);
     memswStat = new File(memDir, MEMSW_STAT);
+  }
+
+  public class CombinedResourceCalulator extends ResourceCalculatorProcessTree {
+    private ProcfsBasedProcessTree legacy;
+    private CGroupsResourceCalculator modern;
+
+    public CombinedResourceCalulator(String pid) {
+      super(pid);
+      legacy = new ProcfsBasedProcessTree(pid);
+      try {
+        modern = new CGroupsResourceCalculator(pid);
+      } catch (YarnException ex) {
+        LOG.error(ex.getMessage(), ex);
+      }
+    }
+
+    @Override
+    public void updateProcessTree() {
+
+    }
+
+    @Override
+    public String getProcessTreeDump() {
+      return null;
+    }
+
+    @Override
+    public float getCpuUsagePercent() {
+      float value1 = legacy.getCpuUsagePercent();
+      float value2 = modern.getCpuUsagePercent();
+      LOG.info("CPU Comparison:" + value1 + " " + value2);
+      LOG.info("Jiffy Comparison:" +
+          legacy.getCumulativeCpuTime() + " " + modern.getCumulativeCpuTime());
+
+      return value2;
+    }
+
+    @Override
+    public boolean checkPidPgrpidForMatch() {
+      return false;
+    }
+
+    @Override
+    public long getCumulativeCpuTime() {
+      return modern.getCumulativeCpuTime();
+    }
+
+    @Override
+    public long getRssMemorySize(int olderThanAge) {
+      LOG.info("MEM Comparison:" +
+          legacy.getRssMemorySize(olderThanAge) + " " +
+          modern.getRssMemorySize(olderThanAge));
+      return legacy.getRssMemorySize(olderThanAge);
+    }
+
+    @Override
+    public long getVirtualMemorySize(int olderThanAge) {
+      LOG.info("MEM Comparison:" +
+          legacy.getVirtualMemorySize(olderThanAge) + " " +
+          modern.getVirtualMemorySize(olderThanAge));
+      return legacy.getVirtualMemorySize(olderThanAge);
+    }
   }
 }
