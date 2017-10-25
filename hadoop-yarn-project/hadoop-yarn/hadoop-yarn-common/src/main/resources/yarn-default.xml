@@ -1309,6 +1309,19 @@
   </property>
 
   <property>
+    <description>Whether YARN CGroups memory tracking is enabled.</description>
+    <name>yarn.nodemanager.resource.memory.enabled</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <description>Whether YARN CGroups strict memory enforcement is enabled.
+    </description>
+    <name>yarn.nodemanager.resource.memory.enforced</name>
+    <value>true</value>
+  </property>
+
+  <property>
     <description>Whether physical memory limits will be enforced for
     containers.</description>
     <name>yarn.nodemanager.pmem-check-enabled</name>
@@ -1622,7 +1635,8 @@
     or be allowed to consume spare resources if they need them. For example, turning the
     flag on will restrict apps to use only their share of CPU, even if the node has spare
     CPU cycles. The default value is false i.e. use available resources. Please note that
-    turning this flag on may reduce job throughput on the cluster.</description>
+    turning this flag on may reduce job throughput on the cluster. This setting does
+    not apply to other subsystems like memory.</description>
     <name>yarn.nodemanager.linux-container-executor.cgroups.strict-resource-usage</name>
     <value>false</value>
   </property>

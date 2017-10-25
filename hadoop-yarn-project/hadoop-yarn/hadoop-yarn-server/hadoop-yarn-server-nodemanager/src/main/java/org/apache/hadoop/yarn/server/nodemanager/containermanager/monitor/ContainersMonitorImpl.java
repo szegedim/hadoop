@@ -20,6 +20,7 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.monitor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resources.CombinedResourceCalculator;
 import org.apache.hadoop.yarn.server.nodemanager.metrics.NodeManagerMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,6 +241,18 @@ public class ContainersMonitorImpl extends AbstractService implements
         }
       } else {
         LOG.info("CGroupsResourceCalculator is not available");
+      }
+    }
+
+    if (processTreeClass == CombinedResourceCalculator.class) {
+      try {
+        final CombinedResourceCalculator cg =
+            new CombinedResourceCalculator(pId);
+        cg.setCGroupFilePaths();
+        pt = cg;
+        LOG.info("CGroups is enabled, so using CombinedResourceCalculator");
+      } catch (YarnException e) {
+        LOG.info("CombinedResourceCalculator cannot be created", e);
       }
     }
 

@@ -44,6 +44,19 @@ import java.util.regex.Pattern;
 /**
  * A cgroups file-system based Resource calculator without the process tree
  * features.
+ *
+ * CGroups has its limitations. It can only be enabled, if both CPU and memory
+ * cgroups are enabled with yarn.nodemanager.resource.cpu.enabled and
+ * yarn.nodemanager.resource.memory.enabled respectively. This means that
+ * there will be memory enforcement by default. You can turn this off and keep
+ * memory reporting only with yarn.nodemanager.resource.memory.enforced
+ *
+ * Another limitation is virtual memory measurement. CGroups does not have the
+ * ability to measure virtual memory usage. This includes memory reserved but
+ * not used. CGroups measures physical memory and swap usage.
+ * This will be returned in the virtual memory counters.
+ * If the real virtual memory is needed please use the legacy procfs based
+ * resource calculator or CombinedResourceCalculator.
  */
 public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   enum Result {
@@ -90,8 +103,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    * Create resource calculator for the container that has the specified pid.
    * @param pid A pid from the cgroup or null for all containers
    */
-  public CGroupsResourceCalculator(String pid)
-      throws YarnException {
+  public CGroupsResourceCalculator(String pid) {
     this(pid, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
         SystemClock.getInstance());
   }
@@ -105,8 +117,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    */
   @VisibleForTesting
   CGroupsResourceCalculator(String pid, String procfsDir,
-                            CGroupsHandler cGroupsHandler, Clock clock)
-      throws YarnException {
+                            CGroupsHandler cGroupsHandler, Clock clock) {
     super(pid);
     this.procfsDir = procfsDir;
     this.cGroupsHandler = cGroupsHandler;

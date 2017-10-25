@@ -1364,6 +1364,12 @@ public class YarnConfiguration extends Configuration {
   public static final boolean DEFAULT_NM_MEMORY_RESOURCE_ENABLED = false;
 
   @Private
+  public static final String NM_MEMORY_RESOURCE_ENFORCED =
+      NM_MEMORY_RESOURCE_PREFIX + "enforced";
+  @Private
+  public static final boolean DEFAULT_NM_MEMORY_RESOURCE_ENFORCED = true;
+
+  @Private
   public static final String NM_MEMORY_RESOURCE_CGROUPS_SWAPPINESS =
       NM_MEMORY_RESOURCE_PREFIX + "cgroups.swappiness";
   @Private
