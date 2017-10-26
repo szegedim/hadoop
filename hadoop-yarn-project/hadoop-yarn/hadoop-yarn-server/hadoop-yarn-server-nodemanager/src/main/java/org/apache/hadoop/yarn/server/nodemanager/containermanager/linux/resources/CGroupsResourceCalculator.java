@@ -48,14 +48,15 @@ import java.util.regex.Pattern;
  * CGroups has its limitations. It can only be enabled, if both CPU and memory
  * cgroups are enabled with yarn.nodemanager.resource.cpu.enabled and
  * yarn.nodemanager.resource.memory.enabled respectively. This means that
- * there will be memory enforcement by default. You can turn this off and keep
- * memory reporting only with yarn.nodemanager.resource.memory.enforced
+ * memory limits are enforced by default. You can turn this off and keep
+ * memory reporting only with yarn.nodemanager.resource.memory.enforced.
  *
  * Another limitation is virtual memory measurement. CGroups does not have the
  * ability to measure virtual memory usage. This includes memory reserved but
- * not used. CGroups measures physical memory and swap usage.
- * This will be returned in the virtual memory counters.
- * If the real virtual memory is needed please use the legacy procfs based
+ * not used. CGroups measures used memory as sa sum of
+ * physical memory and swap usage. This will be returned in the virtual
+ * memory counters.
+ * If the real virtual memory is required please use the legacy procfs based
  * resource calculator or CombinedResourceCalculator.
  */
 public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
@@ -136,7 +137,9 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   public float getCpuUsagePercent() {
     try {
       BigInteger processTotalJiffies = readTotalProcessJiffies();
-      LOG.debug("Process " + pid + " jiffies:" + processTotalJiffies);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Process " + pid + " jiffies:" + processTotalJiffies);
+      }
       cpuTimeTracker.updateElapsedJiffies(processTotalJiffies,
           clock.getTime());
       return cpuTimeTracker.getCpuTrackerUsagePercent();
