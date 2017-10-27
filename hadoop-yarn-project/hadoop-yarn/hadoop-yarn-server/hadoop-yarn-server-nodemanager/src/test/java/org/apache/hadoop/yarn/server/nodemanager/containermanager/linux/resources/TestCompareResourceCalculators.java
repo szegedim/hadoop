@@ -22,6 +22,7 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resourc
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.apache.hadoop.yarn.server.nodemanager.Context;
 import org.apache.hadoop.yarn.util.ProcfsBasedProcessTree;
 import org.apache.hadoop.yarn.util.ResourceCalculatorProcessTree;
 import org.junit.*;
@@ -30,6 +31,8 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Random;
+
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit test for CGroupsResourceCalculator.
@@ -54,7 +57,8 @@ public class TestCompareResourceCalculators {
     conf.setBoolean(YarnConfiguration.NM_CPU_RESOURCE_ENABLED, true);
     ResourceHandlerChain module = null;
     try {
-      module = ResourceHandlerModule.getConfiguredResourceHandlerChain(conf);
+      module = ResourceHandlerModule.getConfiguredResourceHandlerChain(conf,
+          mock(Context.class));
     } catch (ResourceHandlerException e) {
       throw new YarnException("Cannot access cgroups", e);
     }
