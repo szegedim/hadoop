@@ -91,6 +91,7 @@ public class TestCGroupsResourceCalculator {
               "1234", basePath,
               cGroupsHandler, clock);
       calculator.setCGroupFilePaths();
+      calculator.updateProcessTree();
       Assert.assertEquals("cgroups should be missing",
           (long)ResourceCalculatorProcessTree.UNAVAILABLE,
           calculator.getRssMemorySize(0));
@@ -128,6 +129,7 @@ public class TestCGroupsResourceCalculator {
               "1234", basePath,
               cGroupsHandler, clock);
       calculator.setCGroupFilePaths();
+      calculator.updateProcessTree();
       Assert.assertEquals("Incorrect CPU usage",
           90470,
           calculator.getCumulativeCpuTime());
@@ -168,6 +170,7 @@ public class TestCGroupsResourceCalculator {
               cGroupsHandler, clock);
       calculator.setCGroupFilePaths();
 
+      calculator.updateProcessTree();
       // Test the case where memsw is not available (Ubuntu)
       Assert.assertEquals("Incorrect memory usage",
           418496512,
@@ -180,6 +183,7 @@ public class TestCGroupsResourceCalculator {
       FileUtils.writeStringToFile(
           new File(cgMemoryContainerDir, CGroupsResourceCalculator.MEMSW_STAT),
           "418496513\n");
+      calculator.updateProcessTree();
       Assert.assertEquals("Incorrect swap usage",
           418496513,
           calculator.getVirtualMemorySize());
@@ -208,6 +212,7 @@ public class TestCGroupsResourceCalculator {
               null, basePath,
               cGroupsHandler, clock);
       calculator.setCGroupFilePaths();
+      calculator.updateProcessTree();
       Assert.assertEquals("Incorrect CPU usage",
           90470,
           calculator.getCumulativeCpuTime());
@@ -244,6 +249,8 @@ public class TestCGroupsResourceCalculator {
               cGroupsHandler, clock);
       calculator.setCGroupFilePaths();
 
+      calculator.updateProcessTree();
+
       // Test the case where memsw is not available (Ubuntu)
       Assert.assertEquals("Incorrect memory usage",
           418496512,
@@ -256,6 +263,7 @@ public class TestCGroupsResourceCalculator {
       FileUtils.writeStringToFile(
           new File(cgMemoryRootDir, CGroupsResourceCalculator.MEMSW_STAT),
           "418496513\n");
+      calculator.updateProcessTree();
       Assert.assertEquals("Incorrect swap usage",
           418496513,
           calculator.getVirtualMemorySize());

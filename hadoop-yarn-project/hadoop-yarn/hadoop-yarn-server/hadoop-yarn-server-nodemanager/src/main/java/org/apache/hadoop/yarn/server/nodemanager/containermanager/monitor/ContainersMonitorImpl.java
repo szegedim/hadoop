@@ -644,11 +644,14 @@ public class ContainersMonitorImpl extends AbstractService implements
       long pmemLimit = ptInfo.getPmemLimit();
       if (AUDITLOG.isDebugEnabled()) {
         AUDITLOG.debug(String.format(
-                "Memory usage of ProcessTree %s for container-id %s: ",
-                pId, containerId.toString()) +
-                formatUsageString(
-                      currentVmemUsage, vmemLimit,
-                      currentPmemUsage, pmemLimit));
+            "Resource usage of ProcessTree %s for container-id %s:" +
+                " %s CPU:%f CPU/core:%f",
+            pId, containerId.toString(),
+            formatUsageString(
+                currentVmemUsage, vmemLimit,
+                currentPmemUsage, pmemLimit),
+            cpuUsagePercentPerCore,
+            cpuUsageTotalCoresPercentage));
       }
 
       // Add resource utilization for this container

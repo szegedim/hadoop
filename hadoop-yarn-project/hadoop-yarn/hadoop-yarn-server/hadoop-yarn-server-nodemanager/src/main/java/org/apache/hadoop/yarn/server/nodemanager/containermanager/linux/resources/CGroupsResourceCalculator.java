@@ -84,6 +84,10 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   private File memStat;
   private File memswStat;
 
+  private BigInteger processTotalJiffies;
+  private long processPhysicalMemory;
+  private long processVirtualMemory;
+
   private final long jiffyLengthMs;
   private final CpuTimeTracker cpuTimeTracker;
   private Clock clock;
@@ -131,22 +135,17 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     this.cpuTimeTracker =
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
+    this.processTotalJiffies = BigInteger.ZERO;
+    this.processPhysicalMemory = 0L;
+    this.processVirtualMemory = 0L;
   }
 
   @Override
   public float getCpuUsagePercent() {
-    try {
-      BigInteger processTotalJiffies = readTotalProcessJiffies();
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Process " + pid + " jiffies:" + processTotalJiffies);
-      }
-      cpuTimeTracker.updateElapsedJiffies(processTotalJiffies,
-          clock.getTime());
-      return cpuTimeTracker.getCpuTrackerUsagePercent();
-    } catch (YarnException e) {
-      LOG.debug(e.getMessage());
-      return 0;
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Process " + pid + " jiffies:" + processTotalJiffies);
     }
+    return cpuTimeTracker.getCpuTrackerUsagePercent();
   }
 
   @Override
@@ -154,11 +153,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     if (jiffyLengthMs < 0) {
       return UNAVAILABLE;
     }
-    try {
-      return readTotalProcessJiffies().longValue() * jiffyLengthMs;
-    } catch (YarnException e) {
-      return UNAVAILABLE;
-    }
+    return processTotalJiffies.longValue() * jiffyLengthMs;
   }
 
   @Override
@@ -166,7 +161,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     if (olderThanAge > 1) {
       return UNAVAILABLE;
     }
-    return getMemorySize(memStat);
+    return processPhysicalMemory;
   }
 
   @Override
@@ -174,11 +169,20 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     if (olderThanAge > 1) {
       return UNAVAILABLE;
     }
-    return getMemorySize(memswStat);
+    return processVirtualMemory;
   }
 
   @Override
   public void updateProcessTree() {
+    try {
+      this.processTotalJiffies = readTotalProcessJiffies();
+      cpuTimeTracker.updateElapsedJiffies(processTotalJiffies,
+          clock.getTime());
+    } catch (YarnException e) {
+      LOG.debug(e.getMessage());
+    }
+    processPhysicalMemory = getMemorySize(memStat);
+    processVirtualMemory = getMemorySize(memswStat);
   }
 
   @Override
