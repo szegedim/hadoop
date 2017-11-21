@@ -95,6 +95,9 @@ public class ContainersMonitorImpl extends AbstractService implements
   private static final long UNKNOWN_MEMORY_LIMIT = -1L;
   private int nodeCpuPercentageForYARN;
 
+  private boolean cgroupsLogged = false;
+  private boolean cgroupsErrorLogged = false;
+
   /**
    * Type of container metric.
    */
@@ -235,9 +238,19 @@ public class ContainersMonitorImpl extends AbstractService implements
               new CGroupsResourceCalculator(pId);
           cg.setCGroupFilePaths();
           pt = cg;
-          LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
+          if (!cgroupsLogged) {
+            cgroupsLogged = true;
+            LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
+          } else {
+            LOG.debug("CGroups is enabled, so using CGroupsResourceCalculator");
+          }
         } catch (YarnException e) {
-          LOG.info("CGroupsResourceCalculator cannot be created", e);
+          if (!cgroupsErrorLogged) {
+            cgroupsErrorLogged = true;
+            LOG.info("CGroupsResourceCalculator cannot be created", e);
+          } else {
+            LOG.debug("CGroupsResourceCalculator cannot be created", e);
+          }
         }
       } else {
         LOG.info("CGroupsResourceCalculator is not available");
@@ -250,9 +263,19 @@ public class ContainersMonitorImpl extends AbstractService implements
             new CombinedResourceCalculator(pId);
         cg.setCGroupFilePaths();
         pt = cg;
-        LOG.info("CGroups is enabled, so using CombinedResourceCalculator");
+        if (!cgroupsLogged) {
+          cgroupsLogged = true;
+          LOG.info("CGroups is enabled, so using CombinedResourceCalculator");
+        } else {
+          LOG.debug("CGroups is enabled, so using CombinedResourceCalculator");
+        }
       } catch (YarnException e) {
-        LOG.info("CombinedResourceCalculator cannot be created", e);
+        if (!cgroupsErrorLogged) {
+          cgroupsErrorLogged = true;
+          LOG.info("CombinedResourceCalculator cannot be created", e);
+        } else {
+          LOG.debug("CombinedResourceCalculator cannot be created", e);
+        }
       }
     }
 
