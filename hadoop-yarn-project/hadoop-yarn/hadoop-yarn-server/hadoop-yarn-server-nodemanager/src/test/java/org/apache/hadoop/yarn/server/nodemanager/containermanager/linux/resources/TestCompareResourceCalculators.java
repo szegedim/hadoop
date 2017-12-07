@@ -142,16 +142,16 @@ public class TestCompareResourceCalculators {
     // can report a small amount after process stop
     // This is not an issue since the cgroup is deleted
     System.out.println(pmem1 + " " + (pmem2 - SHMEM_KB * 1024));
-      Assert.assertTrue("pmem Error outside range " + pmem1 + " " + pmem2,
-              Math.abs(pmem1 - (pmem2 - SHMEM_KB * 1024)) < 5000000);
+    Assert.assertTrue("pmem Error outside range " + pmem1 + " " + pmem2,
+        Math.abs(pmem1 - (pmem2 - SHMEM_KB * 1024)) < 5000000);
     long vmem1 = metric1.getRssMemorySize(0);
     long vmem2 = metric2.getRssMemorySize(0);
     System.out.println(vmem1 + " " + (vmem2 - SHMEM_KB * 1024));
     // TODO The calculation is different and cgroup
     // can report a small amount after process stop
     // This is not an issue since the cgroup is deleted
-      Assert.assertTrue("vmem Error outside range " + vmem1 + " " + vmem2,
-              Math.abs(vmem1 - (vmem2 - SHMEM_KB * 1024)) < 5000000);
+    Assert.assertTrue("vmem Error outside range " + vmem1 + " " + vmem2,
+        Math.abs(vmem1 - (vmem2 - SHMEM_KB * 1024)) < 5000000);
     float cpu1 = metric1.getCpuUsagePercent();
     float cpu2 = metric2.getCpuUsagePercent();
     if (cpu1 > 0) {

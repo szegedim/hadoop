@@ -26,7 +26,6 @@ import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.SysInfoLinux;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.Clock;
-import org.apache.hadoop.yarn.util.ProcfsBasedProcessTree;
 import org.apache.hadoop.yarn.util.ResourceCalculatorProcessTree;
 import org.apache.hadoop.yarn.util.SystemClock;
 
@@ -297,14 +296,13 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
           // /docker/<dcontainerid>/hadoop-yarn/<containerid>
           // but it is /hadoop-yarn/<containerid> in the cgroups hierarchy
           String cgroupPath = m.group(3);
-          String cgroup =
-              new File(cgroupPath).toPath().getFileName().toString();
 
-          if (cgroup!=null) {
+          if (cgroupPath != null) {
+            String cgroup =
+                new File(cgroupPath).toPath().getFileName().toString();
             result[0] = cGroupsHandler.getRelativePathForCGroup(cgroup);
           } else {
-            LOG.warn("Invalid cgroup path " + cgroupPath +
-                " for " + pidCgroupFile);
+            LOG.warn("Invalid cgroup path for " + pidCgroupFile);
           }
           return Result.Exit;
         }
