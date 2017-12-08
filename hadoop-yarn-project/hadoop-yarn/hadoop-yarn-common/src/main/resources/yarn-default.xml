@@ -1311,7 +1311,7 @@
   <property>
     <description>Whether YARN CGroups memory tracking is enabled.</description>
     <name>yarn.nodemanager.resource.memory.enabled</name>
-    <value>true</value>
+    <value>false</value>
   </property>
 
   <property>
@@ -1319,6 +1319,24 @@
     </description>
     <name>yarn.nodemanager.resource.memory.enforced</name>
     <value>true</value>
+  </property>
+
+  <property>
+    <description>If memory limit is enforced, this the percentage of soft limit
+      compared to the memory assigned to the container. If there is memory
+      pressure container memory usage will be pushed back to its soft limit
+      by swapping out memory.
+    </description>
+    <name>yarn.nodemanager.resource.memory.cgroups.soft-limit-percentage</name>
+    <value>90.0</value>
+  </property>
+
+  <property>
+    <description>Container swappiness is the likelihood a page will be swapped
+      out compared to be kept in memory. Value is between 0-100.
+    </description>
+    <name>yarn.nodemanager.resource.memory.cgroups.swappiness</name>
+    <value>0</value>
   </property>
 
   <property>
