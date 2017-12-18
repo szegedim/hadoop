@@ -516,8 +516,25 @@ char *get_app_directory(const char * nm_root, const char *user,
 /**
  * Get the user directory of a particular user
  */
-char *get_user_directory(const char *nm_root, const char *user) {
+char *get_user_directory(const char *nm_root, const char *user, int uid) {
+  int result = check_nm_local_dir(uid, nm_root);
+  if (result != 0) {
+    fprintf(LOGFILE, "Permission mismatch for %s for uid: %d.\n", nm_root, uid);
+    return NULL;
+  }
   return concatenate(USER_DIR_PATTERN, "user_dir_path", 2, nm_root, user);
+}
+
+/**
+ * Check node manager local dir permission.
+ */
+int check_nm_local_dir(int uid, const char *nm_root) {
+  struct stat info;
+  stat(nm_root, &info);
+  if (uid != info.st_uid) {
+    return 1;
+  }
+  return 0;
 }
 
 /**
@@ -1006,13 +1023,13 @@ static int copy_file(int input, const char* in_filename,
 /**
  * Function to initialize the user directories of a user.
  */
-int initialize_user(const char *user, char* const* local_dirs) {
+int initialize_user(const char *user, const int uid, char* const* local_dirs) {
 
   char *user_dir;
   char* const* local_dir_ptr;
   int failed = 0;
   for(local_dir_ptr = local_dirs; *local_dir_ptr != 0; ++local_dir_ptr) {
-    user_dir = get_user_directory(*local_dir_ptr, user);
+    user_dir = get_user_directory(*local_dir_ptr, user, uid);
     if (user_dir == NULL) {
       fprintf(LOGFILE, "Couldn't get userdir directory for %s.\n", user);
       failed = 1;
@@ -1056,7 +1073,7 @@ int create_log_dirs(const char *app_id, char * const * log_dirs) {
 /**
  * Function to prepare the application directories for the container.
  */
-int initialize_app(const char *user, const char *app_id,
+int initialize_app(const char *user, const int uid, const char *app_id,
                    const char* nmPrivate_credentials_file,
                    char* const* local_dirs, char* const* log_roots,
                    char* const* args) {
@@ -1066,7 +1083,7 @@ int initialize_app(const char *user, const char *app_id,
   }
 
   // create the user directory on all disks
-  int result = initialize_user(user, local_dirs);
+  int result = initialize_user(user, uid, local_dirs);
   if (result != 0) {
     return result;
   }
@@ -1228,7 +1245,7 @@ int create_script_paths(const char *work_dir,
   return exit_code;
 }
 
-int create_local_dirs(const char * user, const char *app_id,
+int create_local_dirs(const char * user, const int uid, const char *app_id,
                        const char *container_id, const char *work_dir,
                        const char *script_name, const char *cred_file,
                        char* const* local_dirs,
@@ -1237,7 +1254,7 @@ int create_local_dirs(const char * user, const char *app_id,
                        int container_file_source, int cred_file_source) {
   int exit_code = -1;
   // create the user directory on all disks
-  int result = initialize_user(user, local_dirs);
+  int result = initialize_user(user, uid, local_dirs);
   if (result != 0) {
     fprintf(ERRORFILE, "Could not create user dir");
     fflush(ERRORFILE);
@@ -1304,7 +1321,7 @@ int create_local_dirs(const char * user, const char *app_id,
   return exit_code;
 }
 
-int launch_docker_container_as_user(const char * user, const char *app_id,
+int launch_docker_container_as_user(const char * user, const int uid, const char *app_id,
                               const char *container_id, const char *work_dir,
                               const char *script_name, const char *cred_file,
                               const char *pid_file, char* const* local_dirs,
@@ -1350,7 +1367,7 @@ int launch_docker_container_as_user(const char * user, const char *app_id,
   }
 
   fprintf(LOGFILE, "Creating local dirs...\n");
-  exit_code = create_local_dirs(user, app_id, container_id,
+  exit_code = create_local_dirs(user, uid, app_id, container_id,
     work_dir, script_name, cred_file, local_dirs, log_dirs,
     1, script_file_dest, cred_file_dest,
     container_file_source, cred_file_source);
@@ -1530,7 +1547,7 @@ cleanup:
 }
 
 
-int launch_container_as_user(const char *user, const char *app_id,
+int launch_container_as_user(const char *user, const int uid, const char *app_id,
                    const char *container_id, const char *work_dir,
                    const char *script_name, const char *cred_file,
                    const char* pid_file, char* const* local_dirs,
@@ -1601,7 +1618,7 @@ int launch_container_as_user(const char *user, const char *app_id,
 #endif
 
   fprintf(LOGFILE, "Creating local dirs...\n");
-  exit_code = create_local_dirs(user, app_id, container_id,
+  exit_code = create_local_dirs(user, uid, app_id, container_id,
     work_dir, script_name, cred_file, local_dirs, log_dirs,
     0, script_file_dest, cred_file_dest,
     container_file_source, cred_file_source);

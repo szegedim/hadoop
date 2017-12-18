@@ -220,7 +220,7 @@ static struct {
   const char *docker_command_file;
 } cmd_input;
 
-static int validate_run_as_user_commands(int argc, char **argv, int *operation);
+static int validate_run_as_user_commands(const int uid, int argc, char **argv, int *operation);
 
 /* Validates that arguments used in the invocation are valid. In case of validation
 failure, an 'errorcode' is returned. In case of successful validation, a zero is
@@ -230,7 +230,7 @@ line parsing mechanism (e.g getopt). For the time being, we'll use this manual
 validation mechanism so that we don't have to change the invocation interface.
 */
 
-static int validate_arguments(int argc, char **argv , int *operation) {
+static int validate_arguments(const int uid, int argc, char **argv , int *operation) {
   if (argc < 2) {
     display_usage(stdout);
     return INVALID_ARGUMENT_NUMBER;
@@ -328,11 +328,11 @@ static int validate_arguments(int argc, char **argv , int *operation) {
     a 'long option' - we should fix this at some point. The validation/argument
     parsing here is extensive enough that it done in a separate function */
 
-  return validate_run_as_user_commands(argc, argv, operation);
+  return validate_run_as_user_commands(uid, argc, argv, operation);
 }
 
 /* Parse/validate 'run as user' commands */
-static int validate_run_as_user_commands(int argc, char **argv, int *operation) {
+static int validate_run_as_user_commands(const int uid, int argc, char **argv, int *operation) {
   /* We need at least the following arguments in order to proceed further :
     <user>, <yarn-user> <command> - i.e at argc should be at least 4 */
 
@@ -511,11 +511,12 @@ static int validate_run_as_user_commands(int argc, char **argv, int *operation) 
 }
 
 int main(int argc, char **argv) {
+  int uid = getuid();
   open_log_files();
   assert_valid_setup(argv[0]);
 
   int operation = -1;
-  int ret = validate_arguments(argc, argv, &operation);
+  int ret = validate_arguments(uid, argc, argv, &operation);
 
   if (ret != 0) {
     flush_and_close_log_files();
@@ -556,6 +557,7 @@ int main(int argc, char **argv) {
     }
 
     exit_code = initialize_app(cmd_input.yarn_user_name,
+                            uid,
                             cmd_input.app_id,
                             cmd_input.cred_file,
                             split(cmd_input.local_dirs),
@@ -578,6 +580,7 @@ int main(int argc, char **argv) {
       }
 
       exit_code = launch_docker_container_as_user(cmd_input.yarn_user_name,
+                      uid,
                       cmd_input.app_id,
                       cmd_input.container_id,
                       cmd_input.current_dir,
@@ -606,6 +609,7 @@ int main(int argc, char **argv) {
     }
 
     exit_code = launch_container_as_user(cmd_input.yarn_user_name,
+                    uid,
                     cmd_input.app_id,
                     cmd_input.container_id,
                     cmd_input.current_dir,

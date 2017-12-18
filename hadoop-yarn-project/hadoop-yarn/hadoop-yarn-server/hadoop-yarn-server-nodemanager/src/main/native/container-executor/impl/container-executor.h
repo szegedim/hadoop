@@ -90,11 +90,11 @@ void read_executor_config(const char* file_name);
 void free_executor_configurations();
 
 // initialize the application directory
-int initialize_app(const char *user, const char *app_id,
+int initialize_app(const char *user, const int uid, const char *app_id,
                    const char *credentials, char* const* local_dirs,
                    char* const* log_dirs, char* const* args);
 
-int launch_docker_container_as_user(const char * user, const char *app_id,
+int launch_docker_container_as_user(const char * user, const int uid, const char *app_id,
                               const char *container_id, const char *work_dir,
                               const char *script_name, const char *cred_file,
                               const char *pid_file, char* const* local_dirs,
@@ -123,7 +123,7 @@ int launch_docker_container_as_user(const char * user, const char *app_id,
  * @param resources_value values needed to apply resource enforcement
  * @return -1 or errorcode enum value on error (should never return on success).
  */
-int launch_container_as_user(const char * user, const char *app_id,
+int launch_container_as_user(const char * user, const int uid, const char *app_id,
                      const char *container_id, const char *work_dir,
                      const char *script_name, const char *cred_file,
                      const char *pid_file, char* const* local_dirs,
@@ -173,10 +173,15 @@ int set_user(const char *user);
 
 // methods to get the directories
 
-char *get_user_directory(const char *nm_root, const char *user);
+char *get_user_directory(const char *nm_root, const char *user, const int uid);
 
 char *get_app_directory(const char * nm_root, const char *user,
                         const char *app_id);
+
+/**
+ * Check node manager local dir permission.
+ */
+int check_nm_local_dir(int uid, const char *nm_root);
 
 char *get_container_work_directory(const char *nm_root, const char *user,
 				 const char *app_id, const char *container_id);
@@ -199,7 +204,7 @@ int mkdirs(const char* path, mode_t perm);
 /**
  * Function to initialize the user directories of a user.
  */
-int initialize_user(const char *user, char* const* local_dirs);
+int initialize_user(const char *user, const int uid, char* const* local_dirs);
 
 /**
  * Create a top level directory for the user.

@@ -152,8 +152,9 @@ void check_pid_file(const char* pid_file, pid_t mypid) {
 }
 
 void test_get_user_directory() {
-  char *user_dir = get_user_directory(TMPDIR, "user");
-  char *expected = TMPDIR "/usercache/user";
+  int uid = getuid();
+  char *user_dir = get_user_directory(TEST_ROOT, "user", uid);
+  char *expected = TEST_ROOT "/usercache/user";
   if (strcmp(user_dir, expected) != 0) {
     printf("test_get_user_directory expected %s got %s\n", expected, user_dir);
     exit(1);
@@ -161,9 +162,29 @@ void test_get_user_directory() {
   free(user_dir);
 }
 
+void test_check_nm_local_dir() {
+  // check filesystem is same as running user.
+  int expected = 0;
+  int uid = getuid();
+  char *local_path = "target";
+  char *root_path = "/";
+  int actual = check_nm_local_dir(uid, local_path);
+  if (expected != actual) {
+    printf("test_nm_local_dir expected %d got %d\n", expected, actual);
+    exit(1);
+  }
+  // check filesystem is different from running user.
+  expected = 1;
+  actual = check_nm_local_dir(uid, root_path);
+  if (expected != actual && uid != 0) {
+    printf("test_nm_local_dir expected %d got %d\n", expected, actual);
+    exit(1);
+  }
+}
+
 void test_get_app_directory() {
-  char *expected = TMPDIR "/usercache/user/appcache/app_200906101234_0001";
-  char *app_dir = (char *) get_app_directory(TMPDIR, "user",
+  char *expected = TEST_ROOT "/usercache/user/appcache/app_200906101234_0001";
+  char *app_dir = (char *) get_app_directory(TEST_ROOT, "user",
       "app_200906101234_0001");
   if (strcmp(app_dir, expected) != 0) {
     printf("test_get_app_directory expected %s got %s\n", expected, app_dir);
@@ -173,9 +194,9 @@ void test_get_app_directory() {
 }
 
 void test_get_container_directory() {
-  char *container_dir = get_container_work_directory(TMPDIR, "owen", "app_1",
+  char *container_dir = get_container_work_directory(TEST_ROOT, "owen", "app_1",
 						 "container_1");
-  char *expected = TMPDIR"/usercache/owen/appcache/app_1/container_1";
+  char *expected = TEST_ROOT "/usercache/owen/appcache/app_1/container_1";
   if (strcmp(container_dir, expected) != 0) {
     printf("Fail get_container_work_directory got %s expected %s\n",
 	   container_dir, expected);
@@ -185,9 +206,9 @@ void test_get_container_directory() {
 }
 
 void test_get_container_launcher_file() {
-  char *expected_file = (TMPDIR"/usercache/user/appcache/app_200906101234_0001"
+  char *expected_file = (TEST_ROOT "/usercache/user/appcache/app_200906101234_0001"
 			 "/launch_container.sh");
-  char *app_dir = get_app_directory(TMPDIR, "user",
+  char *app_dir = get_app_directory(TEST_ROOT, "user",
                                     "app_200906101234_0001");
   char *container_file =  get_container_launcher_file(app_dir);
   if (strcmp(container_file, expected_file) != 0) {
@@ -258,7 +279,8 @@ void test_check_configuration_permissions() {
 }
 
 void test_delete_container() {
-  if (initialize_user(yarn_username, local_dirs)) {
+  int uid = getuid();
+  if (initialize_user(yarn_username, uid, local_dirs)) {
     printf("FAIL: failed to initialize user %s\n", yarn_username);
     exit(1);
   }
@@ -730,6 +752,7 @@ void test_signal_container_group() {
 }
 
 void test_init_app() {
+  int uid = getuid();
   printf("\nTesting init app\n");
   if (seteuid(0) != 0) {
     printf("FAIL: seteuid to root failed - %s\n", strerror(errno));
@@ -774,7 +797,7 @@ void test_init_app() {
     exit(1);
   } else if (child == 0) {
     char *final_pgm[] = {"touch", "my-touch-file", 0};
-    if (initialize_app(yarn_username, "app_4", TEST_ROOT "/creds.txt",
+    if (initialize_app(yarn_username, uid, "app_4", TEST_ROOT "/creds.txt",
                        local_dirs, log_dirs, final_pgm) != 0) {
       printf("FAIL: failed in child\n");
       exit(42);
@@ -818,6 +841,7 @@ void test_init_app() {
 }
 
 void test_run_container() {
+  int uid = getuid();
   printf("\nTesting run container\n");
   if (seteuid(0) != 0) {
     printf("FAIL: seteuid to root failed - %s\n", strerror(errno));
@@ -873,7 +897,7 @@ void test_run_container() {
 	   strerror(errno));
     exit(1);
   } else if (child == 0) {
-    if (launch_container_as_user(yarn_username, "app_4", "container_1",
+    if (launch_container_as_user(yarn_username, uid, "app_4", "container_1",
           container_dir, script_name, TEST_ROOT "/creds.txt", pid_file,
           local_dirs, log_dirs,
           "cgroups", cgroups_pids) != 0) {
@@ -1044,7 +1068,8 @@ static void test_delete_race_internal() {
 }
 
 void test_delete_race() {
-  if (initialize_user(yarn_username, local_dirs)) {
+  int uid = getuid();
+  if (initialize_user(yarn_username, uid, local_dirs)) {
     printf("FAIL: failed to initialize user %s\n", yarn_username);
     exit(1);
   }
@@ -1231,6 +1256,9 @@ int main(int argc, char **argv) {
 
   printf("\nTesting get_user_directory()\n");
   test_get_user_directory();
+
+  printf("\nTesting check_nm_local_dir()\n");
+  test_check_nm_local_dir();
 
   printf("\nTesting get_app_directory()\n");
   test_get_app_directory();
