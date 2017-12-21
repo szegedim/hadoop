@@ -3465,6 +3465,11 @@ public class YarnConfiguration extends Configuration {
       DEFAULT_TIMELINE_SERVICE_COLLECTOR_WEBAPP_HTTPS_ADDRESS =
       DEFAULT_TIMELINE_SERVICE_WEBAPP_HTTPS_ADDRESS;
 
+  public static final String NM_DOWNLOADER_THREAD_COUNT =
+      NM_PREFIX + "downloader.thread.count";
+  public static final int
+      DEFAULT_NM_DOWNLOADER_THREAD_COUNT = 10;
+
   public YarnConfiguration() {
     super();
   }

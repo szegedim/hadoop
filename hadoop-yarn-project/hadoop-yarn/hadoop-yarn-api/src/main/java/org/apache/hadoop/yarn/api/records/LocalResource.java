@@ -43,6 +43,9 @@ import org.apache.hadoop.yarn.util.Records;
 @Public
 @Stable
 public abstract class LocalResource {
+  @Public
+  @Unstable
+  public static final long IGNORE_TIMESTAMP = -1;
 
   @Public
   @Stable

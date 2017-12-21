@@ -34,9 +34,11 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.regex.Pattern;
 
+import org.apache.commons.io.input.TeeInputStream;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.FileUtil;
@@ -92,6 +94,75 @@ public class RunJar {
    */
   public static void unJar(File jarFile, File toDir) throws IOException {
     unJar(jarFile, toDir, MATCH_ANY);
+  }
+
+  /**
+   * Unpack matching files from a jar. Entries inside the jar that do
+   * not match the given pattern will be skipped.
+   *
+   * @param jarFile the .jar file to unpack
+   * @param toDir the destination directory into which to unpack the jar
+   * @param unpackRegex the pattern to match jar entries against
+   *
+   * @throws IOException if an I/O error has occurred or toDir
+   * cannot be created and does not already exist
+   */
+  public static void unJar(InputStream jarFile, File toDir,
+                           Pattern unpackRegex)
+      throws IOException {
+    try (JarInputStream jar = new JarInputStream(jarFile)) {
+      int numOfFailedLastModifiedSet = 0;
+      do {
+        final JarEntry entry = jar.getNextJarEntry();
+        if (entry == null) {
+          break;
+        }
+        if (!entry.isDirectory() &&
+            unpackRegex.matcher(entry.getName()).matches()) {
+          File file = new File(toDir, entry.getName());
+          ensureDirectory(file.getParentFile());
+          try (OutputStream out = new FileOutputStream(file)) {
+            byte[] buf = new byte[BUFFER_SIZE];
+            int bytesRead = jar.read(buf);
+            while (bytesRead >= 0) {
+              out.write(buf, 0, bytesRead);
+              bytesRead = jar.read(buf);
+            }
+          }
+          if (!file.setLastModified(entry.getTime())) {
+            numOfFailedLastModifiedSet++;
+          }
+        }
+      } while (true);
+      if (numOfFailedLastModifiedSet > 0) {
+        LOG.warn("Could not set last modfied time for {} file(s)",
+            numOfFailedLastModifiedSet);
+      }
+    }
+  }
+
+  /**
+   * Unpack matching files from a jar. Entries inside the jar that do
+   * not match the given pattern will be skipped. Keep also a copy
+   * of the entire jar in the same directory
+   *
+   * @param jarFile the .jar file to unpack
+   * @param toDir the destination directory into which to unpack the jar
+   * @param unpackRegex the pattern to match jar entries against
+   *
+   * @throws IOException if an I/O error has occurred or toDir
+   * cannot be created and does not already exist
+   */
+  public static void unJarAndSave(InputStream jarFile, File toDir,
+                           String name, Pattern unpackRegex)
+      throws IOException{
+    File file = new File(toDir, name);
+    ensureDirectory(toDir);
+    try (OutputStream jar = new FileOutputStream(file)) {
+      try(TeeInputStream teeInputStream = new TeeInputStream(jarFile, jar)) {
+        unJar(teeInputStream, toDir, unpackRegex);
+      }
+    }
   }
 
   /**

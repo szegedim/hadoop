@@ -3623,4 +3623,11 @@
     <value></value>
   </property>
 
+  <property>
+    <description>
+      Localizer thread count.
+    </description>
+    <name>yarn.nodemanager.downloader.thread.count</name>
+    <value>10</value>
+  </property>
 </configuration>
