@@ -21,14 +21,20 @@ package org.apache.hadoop.yarn.util;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.security.PrivilegedExceptionAction;
+import java.util.LinkedList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience.LimitedPrivate;
@@ -54,6 +60,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.Futures;
+import org.apache.hadoop.yarn.exceptions.YarnException;
 
 /**
  * Download a single URL to the local disk.
@@ -64,6 +71,7 @@ public class FSDownload implements Callable<Path> {
 
   private static final Log LOG = LogFactory.getLog(FSDownload.class);
 
+  private ExecutorService executor = Executors.newFixedThreadPool(10);
   private FileContext files;
   private final UserGroupInformation userUgi;
   private Configuration conf;
@@ -342,6 +350,168 @@ public class FSDownload implements Callable<Path> {
     //return FileUtil.getDU(destDir);
   }
 
+  /**
+   * Use asynchronous calls and streaming to localize files
+   * @param destination destination directory
+   * @throws IOException cannot read or write file
+   * @throws InterruptedException operation interrupted
+   * @throws ExecutionException thread pool error
+   * @throws YarnException subcommand returned an error
+   */
+  private void parallelCall(Path destination)
+      throws IOException, InterruptedException,
+      ExecutionException, YarnException {
+    final Path sCopy;
+    try {
+      sCopy = resource.getResource().toPath();
+    } catch (URISyntaxException e) {
+      throw new IOException("Invalid resource", e);
+    }
+    FileSystem sourceFs = sCopy.getFileSystem(conf);
+    FileStatus sStat = sourceFs.getFileStatus(sCopy);
+    if (sStat.getModificationTime() != resource.getTimestamp()) {
+      throw new IOException("Resource " + sCopy +
+          " changed on src filesystem (expected " + resource.getTimestamp() +
+          ", was " + sStat.getModificationTime());
+    }
+    if (resource.getVisibility() == LocalResourceVisibility.PUBLIC) {
+      if (!isPublic(sourceFs, sCopy, sStat, statCache)) {
+        throw new IOException("Resource " + sCopy +
+            " is not publicly accessible and as such cannot be part of the" +
+            " public cache.");
+      }
+    }
+
+    Exception ex = parallelCopy(sCopy, destination);
+    if (ex != null) {
+      throw new YarnException("Parallel download failed", ex);
+    }
+  }
+
+  private Exception parallelCopy(Path source, Path destination) {
+    try {
+      FileSystem sourceFileSystem = source.getFileSystem(conf);
+      FileSystem destinationFileSystem = destination.getFileSystem(conf);
+      if (sourceFileSystem.getFileStatus(source).isDirectory()) {
+        LinkedList<Future<Exception>> tasks = new LinkedList<>();
+        for (FileStatus child : sourceFileSystem.listStatus(source)) {
+          tasks.add(executor.submit(() -> {
+            return parallelCopy(
+                child.getPath(),
+                new Path(destination, child.getPath().getName()));
+          }));
+        }
+        LinkedList<Exception> exceptions = new LinkedList<>();
+        for(Future<Exception> task: tasks) {
+          Exception ex = task.get();
+          if (ex != null) {
+            exceptions.add(ex);
+          }
+        }
+        for (Exception ex: exceptions) {
+          throw new YarnException("FSDownload failed", ex);
+        }
+      } else {
+        try (InputStream inputStream = sourceFileSystem.open(source)) {
+          String localOutput = new File(destination.toUri()).getAbsolutePath();
+          String lowerDst = StringUtils.toLowerCase(destination.toString());
+          switch (resource.getType()) {
+          case PATTERN:
+            if (lowerDst.endsWith(".jar")) {
+              String p = resource.getPattern();
+              RunJar.unJar(inputStream, new File(destination.toUri()),
+                  p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
+              break;
+            } else {
+              LOG.warn("Treating [" + destination + "] " +
+                  "as an archive even though it " +
+                  "was specified as PATTERN");
+            }
+          case ARCHIVE:
+            StringBuilder command = new StringBuilder();
+            command.append("");
+            while (true) {
+              if (lowerDst.endsWith(".tgz")) {
+                lowerDst =
+                    lowerDst.substring(0, lowerDst.length() - 3) + "tar.gz";
+              } else if (lowerDst.endsWith(".gz")) {
+                command.append("gzip -dc | ");
+                lowerDst = lowerDst.substring(0, lowerDst.length() - 3);
+              } else if (lowerDst.endsWith(".tar")) {
+                command
+                    .append("(")
+                    .append("rm -rf '")
+                    .append(localOutput)
+                    .append("';")
+                    .append("mkdir '")
+                    .append(localOutput)
+                    .append("'; cd '")
+                    .append(localOutput)
+                    .append("';")
+                    .append("tar -xv")
+                    .append(")");
+                lowerDst = lowerDst.substring(0, lowerDst.length() - 4);
+              } else if (lowerDst.endsWith(".jar") ||
+                  lowerDst.endsWith(".zip")) {
+                command
+                    .append("(")
+                    .append("rm -rf '")
+                    .append(localOutput)
+                    .append("';")
+                    .append("mkdir '")
+                    .append(localOutput)
+                    .append("'; cd '")
+                    .append(localOutput)
+                    .append("';")
+                    .append("jar xv)");
+                lowerDst = lowerDst.substring(0, lowerDst.length() - 4);
+              } else {
+                break;
+              }
+            }
+            command.append("");
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("bash", "-c", command.toString());
+            Process process = builder.start();
+            IOUtils.copy(inputStream, process.getOutputStream());
+            process.getOutputStream().close();
+            Future<String> output = executor.submit(()->{
+              try {
+                return IOUtils.toString(process.getInputStream());
+              } catch (IOException e) {
+                return e.getMessage();
+              }
+            });
+            Future<String> error = executor.submit(()->{
+              try {
+                return IOUtils.toString(process.getErrorStream());
+              } catch (IOException e) {
+                return e.getMessage();
+              }
+            });
+            if (process.waitFor() != 0) {
+              throw new IOException("Process " + command + " exited with " +
+              process.exitValue() + "\n" + error.get() + "\n" + output.get());
+            }
+            LOG.info(error.get() + "\n" + output.get());
+            break;
+          case FILE:
+          default:
+            try (OutputStream outputStream =
+                     destinationFileSystem.create(destination, true)) {
+              IOUtils.copy(inputStream, outputStream);
+            }
+            break;
+          }
+        }
+      }
+    } catch (Exception e) {
+      return e;
+    }
+    return null;
+  }
+
+
   @Override
   public Path call() throws Exception {
     final Path sCopy;
@@ -360,13 +530,14 @@ public class FSDownload implements Callable<Path> {
     createDir(dst_work, cachePerms);
     Path dFinal = files.makeQualified(new Path(dst_work, sCopy.getName()));
     try {
-      Path dTmp = null == userUgi ? files.makeQualified(copy(sCopy, dst_work))
-          : userUgi.doAs(new PrivilegedExceptionAction<Path>() {
-            public Path run() throws Exception {
-              return files.makeQualified(copy(sCopy, dst_work));
-            };
-          });
-      unpack(new File(dTmp.toUri()), new File(dFinal.toUri()));
+      parallelCall(dFinal);
+//      Path dTmp = null == userUgi ? files.makeQualified(copy(sCopy, dst_work))
+//          : userUgi.doAs(new PrivilegedExceptionAction<Path>() {
+//            public Path run() throws Exception {
+//              return files.makeQualified(copy(sCopy, dst_work));
+//            };
+//          });
+//      unpack(new File(dTmp.toUri()), new File(dFinal.toUri()));
       changePermissions(dFinal.getFileSystem(conf), dFinal);
       files.rename(dst_work, destDirPath, Rename.OVERWRITE);
 
