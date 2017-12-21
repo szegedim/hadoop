@@ -132,6 +132,18 @@ public class TestFSDownload {
     FileOutputStream stream = new FileOutputStream(jarFile);
     LOG.info("Create jar out stream ");
     JarOutputStream out = new JarOutputStream(stream, new Manifest());
+    ZipEntry entry = new ZipEntry("classes/1.class");
+    out.putNextEntry(entry);
+    out.write(1);
+    out.write(2);
+    out.write(3);
+    out.closeEntry();
+    ZipEntry entry2 = new ZipEntry("classes/2.class");
+    out.putNextEntry(entry2);
+    out.write(1);
+    out.write(2);
+    out.write(3);
+    out.closeEntry();
     LOG.info("Done writing jar stream ");
     out.close();
     LocalResource ret = recordFactory.newRecordInstance(LocalResource.class);
@@ -438,7 +450,7 @@ public class TestFSDownload {
         FileStatus status = files.getFileStatus(localized.getParent());
         FsPermission perm = status.getPermission();
         assertEquals("Cache directory permissions are incorrect",
-            new FsPermission((short)0755), perm);
+            new FsPermission((short)0700), perm);
 
         status = files.getFileStatus(localized);
         perm = status.getPermission();
@@ -542,7 +554,7 @@ public class TestFSDownload {
     downloadWithFileType(TEST_FILE_TYPE.JAR);
   }
 
-  @Test (timeout=10000) 
+  @Test (timeout=10000)
   public void testDownloadArchiveZip() throws IOException, URISyntaxException,
       InterruptedException {
     downloadWithFileType(TEST_FILE_TYPE.ZIP);
