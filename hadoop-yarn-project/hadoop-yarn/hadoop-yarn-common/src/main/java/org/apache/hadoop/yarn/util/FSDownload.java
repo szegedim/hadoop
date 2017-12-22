@@ -43,6 +43,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Options.Rename;
 import org.apache.hadoop.fs.Path;
@@ -368,8 +369,8 @@ public class FSDownload implements Callable<Path> {
               "was specified as PATTERN");
         }
       case ARCHIVE:
-        if (decompress(inputStream,
-                       destination)) {
+        if (FileUtil.decompress(
+            inputStream, source.getName(), destination, executor)) {
           break;
         }  else {
           LOG.warn("Cannot unpack [" + source + "] trying to copy");
@@ -385,94 +386,6 @@ public class FSDownload implements Callable<Path> {
     }
     // TODO Should calculate here before returning
     //return FileUtil.getDU(destDir);
-  }
-
-  private boolean decompress(InputStream inputStream,
-                             Path destination)
-      throws IOException, InterruptedException, ExecutionException {
-    String destinationFile =
-        StringUtils.toLowerCase(destination.getName());
-    String destinationPath =
-        new File(destination.toUri()).getAbsolutePath()
-           .replace("'", "\\'");
-    StringBuilder command = new StringBuilder();
-    boolean complete = false;
-    while (true) {
-      if (destinationFile.endsWith(".tgz")) {
-        destinationFile =
-           destinationFile
-               .substring(0, destinationFile.length() - 3) + "tar.gz";
-      } else if (destinationFile.endsWith(".gz")) {
-        command.append("gzip -dc | ");
-        destinationFile =
-           destinationFile.substring(0, destinationFile.length() - 3);
-      } else if (destinationFile.endsWith(".tar")) {
-        command
-            .append("(")
-            .append("rm -rf '")
-            .append(destinationPath)
-            .append("';")
-            .append("mkdir '")
-            .append(destinationPath)
-            .append("'; cd '")
-            .append(destinationPath)
-            .append("';")
-            .append("tar -xv")
-            .append(")");
-        destinationFile =
-           destinationFile.substring(0, destinationFile.length() - 4);
-        complete = true;
-        break;
-      } else if (destinationFile.endsWith(".jar") ||
-          destinationFile.endsWith(".zip")) {
-        command
-            .append("(")
-            .append("rm -rf '")
-            .append(destinationPath)
-            .append("';")
-            .append("mkdir '")
-            .append(destinationPath)
-            .append("'; cd '")
-            .append(destinationPath)
-            .append("';")
-            .append("jar xv)");
-        destinationFile =
-           destinationFile.substring(0, destinationFile.length() - 4);
-        complete = true;
-        break;
-      } else {
-        break;
-      }
-    }
-    if (complete) {
-      ProcessBuilder builder = new ProcessBuilder();
-      builder.command("bash", "-c", command.toString());
-      Process process = builder.start();
-      IOUtils.copy(inputStream, process.getOutputStream());
-      process.getOutputStream().close();
-      Future<String> output = executor.submit(() -> {
-        try {
-          return IOUtils.toString(process.getInputStream());
-        } catch (IOException e) {
-          return e.getMessage();
-        }
-      });
-      Future<String> error = executor.submit(() -> {
-        try {
-          return IOUtils.toString(process.getErrorStream());
-        } catch (IOException e) {
-          return e.getMessage();
-        }
-      });
-      if (process.waitFor() != 0) {
-        throw new IOException("Process " + command + " exited with " +
-            process.exitValue() +
-            "\n" + error.get() + "\n" + output.get() + "\n");
-      }
-      LOG.info(error.get() + "\n" + output.get() + "\n");
-      return true;
-    }
-    return false;
   }
 
   @Override
