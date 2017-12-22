@@ -35,6 +35,10 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -621,6 +625,135 @@ public class FileUtil {
   }
 
   /**
+   * Decompress the given stream with file name name to the destination path.
+   * @param inputStream compressed data
+   * @param name file name ending with the compression type like tar.gz
+   * @param destination Destination path
+   * @param executorService Optional thread pool service
+   * @return Whether this is a compressed file and decompression was successful
+   * @throws IOException Could not read or write data
+   * @throws InterruptedException Operation interrupted
+   * @throws ExecutionException Could not submit thread pool items
+   */
+  public static boolean decompress(
+      InputStream inputStream,
+      String name,
+      Path destination,
+      ExecutorService executorService)
+      throws IOException, InterruptedException, ExecutionException {
+    String fileName =
+        StringUtils.toLowerCase(name);
+    String destinationPath =
+        new File(destination.toUri()).getAbsolutePath()
+            .replace("'", "\\'");
+    StringBuilder command = new StringBuilder();
+    boolean tar = false;
+    boolean zipOrJar = false;
+    boolean gzipped = false;
+    while (true) {
+      if (fileName.endsWith(".tgz")) {
+        fileName =
+            fileName
+                .substring(0, fileName.length() - 3) + "tar.gz";
+      } else if (fileName.endsWith(".gz")) {
+        command.append("gzip -dc | ");
+        fileName =
+            fileName.substring(0, fileName.length() - 3);
+        gzipped = true;
+      } else if (fileName.endsWith(".tar")) {
+        command
+            .append("(")
+            .append("rm -rf '")
+            .append(destinationPath)
+            .append("';")
+            .append("mkdir '")
+            .append(destinationPath)
+            .append("'; cd '")
+            .append(destinationPath)
+            .append("';")
+            .append("tar -xv")
+            .append(")");
+        tar = true;
+        break;
+      } else if (fileName.endsWith(".jar") ||
+          fileName.endsWith(".zip")) {
+        command
+            .append("(")
+            .append("rm -rf '")
+            .append(destinationPath)
+            .append("';")
+            .append("mkdir '")
+            .append(destinationPath)
+            .append("'; cd '")
+            .append(destinationPath)
+            .append("';")
+            .append("jar xv)");
+        zipOrJar = true;
+        break;
+      } else {
+        break;
+      }
+    }
+    if(Shell.WINDOWS && tar) {
+      // Tar is not native to Windows. Use simple Java based implementation for
+      // tests and simple tar archives
+      unTarUsingJava(inputStream,
+          new File(destination.toUri()), gzipped);
+      return true;
+    } else if (tar || zipOrJar) {
+      runCommandOnStream(inputStream, executorService, command.toString());
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Run a command and send the contents of an input stream to it.
+   * @param inputStream Input stream to forward to the shell command
+   * @param executor0 Optional executor
+   * @param command shell command to run
+   * @throws IOException read or write failed
+   * @throws InterruptedException command interrupted
+   * @throws ExecutionException task submit failed
+   */
+  private static void runCommandOnStream(
+      InputStream inputStream, ExecutorService executor0, String command)
+      throws IOException, InterruptedException, ExecutionException {
+    String shell = Shell.WINDOWS ? "cmd" : "bash";
+    String cmdSwitch = Shell.WINDOWS ? "/c" : "-c";
+    ExecutorService executor =
+        executor0 != null ? executor0 :
+            Executors.newFixedThreadPool(2);
+    ProcessBuilder builder = new ProcessBuilder();
+    builder.command(shell, cmdSwitch, command);
+    Process process = builder.start();
+    Future<String> output = executor.submit(() -> {
+      try {
+        return org.apache.commons.io.IOUtils.toString(process.getInputStream());
+      } catch (IOException e) {
+        return e.getMessage();
+      }
+    });
+    Future<String> error = executor.submit(() -> {
+      try {
+        return org.apache.commons.io.IOUtils.toString(process.getErrorStream());
+      } catch (IOException e) {
+        return e.getMessage();
+      }
+    });
+    org.apache.commons.io.IOUtils.copy(inputStream, process.getOutputStream());
+    process.getOutputStream().close();
+    if (process.waitFor() != 0) {
+      throw new IOException("Process " + command + " exited with " +
+          process.exitValue() +
+          "\n" + error.get() + "\n" + output.get() + "\n");
+    }
+    org.apache.commons.io.IOUtils.copy(inputStream, process.getOutputStream());
+    process.getOutputStream().close();
+    LOG.info(error.get() + "\n" + output.get() + "\n");
+  }
+
+  /**
    * Given a Tar File as input it will untar the file in a the untar directory
    * passed as the second parameter
    *
@@ -688,6 +821,29 @@ public class FileUtil {
             new FileInputStream(inFile)));
       } else {
         inputStream = new BufferedInputStream(new FileInputStream(inFile));
+      }
+
+      tis = new TarArchiveInputStream(inputStream);
+
+      for (TarArchiveEntry entry = tis.getNextTarEntry(); entry != null;) {
+        unpackEntries(tis, entry, untarDir);
+        entry = tis.getNextTarEntry();
+      }
+    } finally {
+      IOUtils.cleanupWithLogger(LOG, tis, inputStream);
+    }
+  }
+
+  private static void unTarUsingJava(InputStream inputStream, File untarDir,
+                                     boolean gzipped) throws IOException {
+    TarArchiveInputStream tis = null;
+    try {
+      if (gzipped) {
+        inputStream = new BufferedInputStream(new GZIPInputStream(
+            inputStream));
+      } else {
+        inputStream =
+            new BufferedInputStream(inputStream);
       }
 
       tis = new TarArchiveInputStream(inputStream);
