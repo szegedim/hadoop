@@ -40,6 +40,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.NotLinkException;
+import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -71,6 +74,8 @@ public class FrameworkUploader implements Runnable {
   String target = null;
   @VisibleForTesting
   short replication = 10;
+  @VisibleForTesting
+  boolean ignoreSymlink = false;
 
   @VisibleForTesting
   Set<String> filteredInputFiles = new HashSet<>();
@@ -284,6 +289,21 @@ public class FrameworkUploader implements Runnable {
         break;
       }
     }
+    if (ignoreSymlink) {
+      try {
+        java.nio.file.Path link = Files.readSymbolicLink(jar.toPath());
+        java.nio.file.Path jarPath = Paths.get(jar.getAbsolutePath());
+        if (!link.toString().contains("/")) {
+          excluded = true;
+          LOG.info(String.format("Ignoring same directory link %s to %s",
+              jarPath.toString(), link.toString()));
+        }
+      } catch (NotLinkException ex) {
+        LOG.debug("Not a link", jar);
+      } catch (IOException ex) {
+        LOG.warn("Cannot read symbolic link on", jar);
+      }
+    }
     if (found && !excluded) {
       LOG.info("Whitelisted " + jar.getAbsolutePath());
       if (!filteredInputFiles.add(jar.getAbsolutePath())) {
@@ -340,6 +360,9 @@ public class FrameworkUploader implements Runnable {
         .withDescription(
             "Desired replication count")
         .hasArg().create("replication"));
+    opts.addOption(OptionBuilder
+        .withDescription("Ignore symlinks into the same directory")
+        .create("nosymlink"));
     GenericOptionsParser parser = new GenericOptionsParser(opts, args);
     if (parser.getCommandLine().hasOption("help") ||
         parser.getCommandLine().hasOption("h")) {
@@ -354,6 +377,9 @@ public class FrameworkUploader implements Runnable {
         "blacklist", DefaultJars.DEFAULT_EXCLUDED_MR_JARS);
     replication = Short.parseShort(parser.getCommandLine().getOptionValue(
         "replication", "10"));
+    if (parser.getCommandLine().hasOption("nosymlink")) {
+      ignoreSymlink = true;
+    }
     String fs = parser.getCommandLine()
         .getOptionValue("fs", null);
     if (fs == null) {
