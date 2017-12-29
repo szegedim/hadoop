@@ -54,6 +54,7 @@ import org.apache.hadoop.util.RunJar;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.records.LocalResource;
+import org.apache.hadoop.yarn.api.records.LocalResourceType;
 import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -354,34 +355,32 @@ public class FSDownload implements Callable<Path> {
     try (InputStream inputStream = sourceFileSystem.open(source)) {
       String destinationFile =
           StringUtils.toLowerCase(destination.getName());
-      switch (resource.getType()) {
-      case PATTERN:
+      if (resource.getType() == LocalResourceType.PATTERN) {
         if (destinationFile.endsWith(".jar")) {
           // Unpack and keep a copy of the whole jar for mapreduce
           String p = resource.getPattern();
           RunJar.unJarAndSave(inputStream, new File(destination.toUri()),
               source.getName(),
               p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
-          break;
+          return;
         } else {
           LOG.warn("Treating [" + source + "] " +
               "as an archive even though it " +
               "was specified as PATTERN");
         }
-      case ARCHIVE:
+      }
+      if (resource.getType() == LocalResourceType.ARCHIVE) {
         if (FileUtil.decompress(
             inputStream, source.getName(), destination, executor)) {
-          break;
-        }  else {
+          return;
+        } else {
           LOG.warn("Cannot unpack [" + source + "] trying to copy");
         }
-      case FILE:
-      default:
-        try (OutputStream outputStream =
-                 destinationFileSystem.create(destination, true)) {
-          IOUtils.copy(inputStream, outputStream);
-        }
-        break;
+      }
+      // Fall back to copying
+      try (OutputStream outputStream =
+               destinationFileSystem.create(destination, true)) {
+        IOUtils.copy(inputStream, outputStream);
       }
     }
     // TODO Should calculate here before returning
