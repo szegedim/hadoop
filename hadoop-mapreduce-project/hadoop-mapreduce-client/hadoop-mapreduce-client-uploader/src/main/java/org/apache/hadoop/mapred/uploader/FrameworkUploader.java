@@ -74,8 +74,7 @@ public class FrameworkUploader implements Runnable {
   String target = null;
   @VisibleForTesting
   short replication = 10;
-  @VisibleForTesting
-  boolean ignoreSymlink = false;
+  private boolean ignoreSymlink = false;
 
   @VisibleForTesting
   Set<String> filteredInputFiles = new HashSet<>();
@@ -84,8 +83,7 @@ public class FrameworkUploader implements Runnable {
   @VisibleForTesting
   List<Pattern> blacklistedFiles = new LinkedList<>();
 
-  @VisibleForTesting
-  OutputStream targetStream = null;
+  private OutputStream targetStream = null;
   private String alias = null;
 
   private void printHelp(Options options) {
@@ -293,7 +291,10 @@ public class FrameworkUploader implements Runnable {
       try {
         java.nio.file.Path link = Files.readSymbolicLink(jar.toPath());
         java.nio.file.Path jarPath = Paths.get(jar.getAbsolutePath());
-        if (!link.toString().contains("/")) {
+        String linkString = link.toString();
+        if (!linkString.contains("/") ||
+            (linkString.startsWith("./") &&
+                !linkString.substring(2, linkString.length()).contains("/"))) {
           excluded = true;
           LOG.info(String.format("Ignoring same directory link %s to %s",
               jarPath.toString(), link.toString()));
