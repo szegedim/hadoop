@@ -728,28 +728,36 @@ public class FileUtil {
     builder.command(shell, cmdSwitch, command);
     Process process = builder.start();
     Future<String> output = executor.submit(() -> {
+      // Read until the output stream receives an EOF and closed.
       try {
         return org.apache.commons.io.IOUtils.toString(process.getInputStream());
       } catch (IOException e) {
         return e.getMessage();
+      } finally {
+        process.getInputStream().close();
       }
     });
     Future<String> error = executor.submit(() -> {
       try {
+        // Read until the error stream receives an EOF and closed.
         return org.apache.commons.io.IOUtils.toString(process.getErrorStream());
       } catch (IOException e) {
         return e.getMessage();
+      } finally {
+        process.getErrorStream().close();
       }
     });
-    org.apache.commons.io.IOUtils.copy(inputStream, process.getOutputStream());
-    process.getOutputStream().close();
+    try {
+      org.apache.commons.io.IOUtils.copy(
+          inputStream, process.getOutputStream());
+    } finally {
+      process.getOutputStream().close();
+    }
     if (process.waitFor() != 0) {
       throw new IOException("Process " + command + " exited with " +
           process.exitValue() +
           "\n" + error.get() + "\n" + output.get() + "\n");
     }
-    org.apache.commons.io.IOUtils.copy(inputStream, process.getOutputStream());
-    process.getOutputStream().close();
     LOG.info(error.get() + "\n" + output.get() + "\n");
   }
 

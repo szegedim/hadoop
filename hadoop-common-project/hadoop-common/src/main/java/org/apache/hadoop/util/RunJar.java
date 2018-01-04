@@ -158,10 +158,9 @@ public class RunJar {
       throws IOException{
     File file = new File(toDir, name);
     ensureDirectory(toDir);
-    try (OutputStream jar = new FileOutputStream(file)) {
-      try(TeeInputStream teeInputStream = new TeeInputStream(jarFile, jar)) {
-        unJar(teeInputStream, toDir, unpackRegex);
-      }
+    try (OutputStream jar = new FileOutputStream(file);
+         TeeInputStream teeInputStream = new TeeInputStream(jarFile, jar)) {
+      unJar(teeInputStream, toDir, unpackRegex);
     }
   }
 
