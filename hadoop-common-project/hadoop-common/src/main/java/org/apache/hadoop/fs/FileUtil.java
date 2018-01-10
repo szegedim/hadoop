@@ -45,6 +45,7 @@ import java.util.jar.Manifest;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
 import org.apache.commons.collections.map.CaseInsensitiveMap;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -56,6 +57,7 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.nativeio.NativeIO;
+import org.apache.hadoop.util.RunJar;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.Shell.ShellCommandExecutor;
 import org.apache.hadoop.util.StringUtils;
@@ -77,6 +79,11 @@ public class FileUtil {
    * "src\winutils\common.h"
    * */
   public static final int SYMLINK_NO_PRIVILEGE = 2;
+
+  /**
+   * Buffer size for copy the content of compressed file to new file.
+   */
+  private static final int BUFFER_SIZE = 8_192;
 
   /**
    * convert an array of FileStatus to an array of Path
@@ -630,6 +637,7 @@ public class FileUtil {
    * @param name file name ending with the compression type like tar.gz
    * @param destination Destination path
    * @param executorService Optional thread pool service
+   * @param useOSCommand Whether to use OS commands to decompress
    * @return Whether this is a compressed file and decompression was successful
    * @throws IOException Could not read or write data
    * @throws InterruptedException Operation interrupted
@@ -639,70 +647,68 @@ public class FileUtil {
       InputStream inputStream,
       String name,
       Path destination,
-      ExecutorService executorService)
+      ExecutorService executorService,
+      boolean useOSCommand)
       throws IOException, InterruptedException, ExecutionException {
     String fileName =
         StringUtils.toLowerCase(name);
     String destinationPath =
-        new File(destination.toUri()).getAbsolutePath()
-            .replace("'", "\\'");
-    StringBuilder command = new StringBuilder();
-    boolean tar = false;
-    boolean zipOrJar = false;
-    boolean gzipped = false;
-    while (true) {
-      if (fileName.endsWith(".tgz")) {
-        fileName =
-            fileName
-                .substring(0, fileName.length() - 3) + "tar.gz";
-      } else if (fileName.endsWith(".gz")) {
-        command.append("gzip -dc | ");
-        fileName =
-            fileName.substring(0, fileName.length() - 3);
-        gzipped = true;
-      } else if (fileName.endsWith(".tar")) {
-        command
-            .append("(")
-            .append("rm -rf '")
-            .append(destinationPath)
-            .append("';")
-            .append("mkdir '")
-            .append(destinationPath)
-            .append("'; cd '")
-            .append(destinationPath)
-            .append("';")
-            .append("tar -xv")
-            .append(")");
-        tar = true;
-        break;
-      } else if (fileName.endsWith(".jar") ||
-          fileName.endsWith(".zip")) {
-        command
-            .append("(")
-            .append("rm -rf '")
-            .append(destinationPath)
-            .append("';")
-            .append("mkdir '")
-            .append(destinationPath)
-            .append("'; cd '")
-            .append(destinationPath)
-            .append("';")
-            .append("jar xv)");
-        zipOrJar = true;
-        break;
-      } else {
-        break;
-      }
+        new File(destination.toUri()).getAbsolutePath();
+    if (destinationPath.contains("'")) {
+      throw new IOException("Invalid path " + destinationPath +
+          ". Possible code injection attack");
     }
-    if(Shell.WINDOWS && tar) {
-      // Tar is not native to Windows. Use simple Java based implementation for
-      // tests and simple tar archives
-      unTarUsingJava(inputStream,
-          new File(destination.toUri()), gzipped);
-      return true;
-    } else if (tar || zipOrJar) {
-      runCommandOnStream(inputStream, executorService, command.toString());
-      return true;
+    StringBuilder command = new StringBuilder();
+    boolean isGzipped = fileName.endsWith(".gz");
+    boolean isTar =
+        fileName.endsWith(".tar") ||
+        fileName.endsWith(".tar.gz") ||
+        fileName.endsWith(".tgz");
+    boolean isZip = fileName.endsWith(".zip");
+    boolean isJar = fileName.endsWith(".jar");
+    String verbose = LOG.isDebugEnabled() ? "v" : "";
+
+    if(Shell.WINDOWS || !useOSCommand) {
+      if (isTar) {
+        unTarUsingJava(inputStream,
+            new File(destination.toUri()), isGzipped);
+        return true;
+      } else if (isZip) {
+        unZipUsingJava(inputStream,
+            new File(destination.toUri()));
+        return true;
+      } else if (isJar) {
+        RunJar.unJar(
+            inputStream, new File(destination.toUri()), RunJar.MATCH_ANY);
+        return true;
+      }
+    } else {
+      if (isGzipped) {
+        command.append("gzip -dc | ");
+      }
+      if (isTar) {
+        command
+            .append("(")
+            .append("cd '")
+            .append(destinationPath)
+            .append("' &&")
+            .append("tar -x")
+            .append(verbose)
+            .append(")");
+      } else if (isZip || isJar) {
+        command
+            .append("(")
+            .append("cd '")
+            .append(destinationPath)
+            .append("'&&")
+            .append("jar x")
+            .append(verbose)
+            .append(")");
+      }
+      if (!command.toString().isEmpty()) {
+        runCommandOnStream(inputStream, executorService, command.toString());
+        return true;
+      }
     }
     return false;
   }
@@ -727,38 +733,47 @@ public class FileUtil {
     ProcessBuilder builder = new ProcessBuilder();
     builder.command(shell, cmdSwitch, command);
     Process process = builder.start();
-    Future<String> output = executor.submit(() -> {
-      // Read until the output stream receives an EOF and closed.
-      try {
-        return org.apache.commons.io.IOUtils.toString(process.getInputStream());
-      } catch (IOException e) {
-        return e.getMessage();
-      } finally {
-        process.getInputStream().close();
-      }
-    });
-    Future<String> error = executor.submit(() -> {
-      try {
-        // Read until the error stream receives an EOF and closed.
-        return org.apache.commons.io.IOUtils.toString(process.getErrorStream());
-      } catch (IOException e) {
-        return e.getMessage();
-      } finally {
-        process.getErrorStream().close();
-      }
-    });
+    Future<String> output = null;
+    Future<String> error = null;
+    String result =
+        String.format("\nEnable debug logs on %s for details", LOG.getName());
+    if (LOG.isDebugEnabled()) {
+      output = executor.submit(() -> {
+        // Read until the output stream receives an EOF and closed.
+        try {
+          return
+              org.apache.commons.io.IOUtils.toString(process.getInputStream());
+        } catch (IOException e) {
+          return e.getMessage();
+        } finally {
+          process.getInputStream().close();
+        }
+      });
+      error = executor.submit(() -> {
+        try {
+          // Read until the error stream receives an EOF and closed.
+          return
+              org.apache.commons.io.IOUtils.toString(process.getErrorStream());
+        } catch (IOException e) {
+          return e.getMessage();
+        } finally {
+          process.getErrorStream().close();
+        }
+      });
+    }
     try {
       org.apache.commons.io.IOUtils.copy(
           inputStream, process.getOutputStream());
     } finally {
       process.getOutputStream().close();
     }
-    if (process.waitFor() != 0) {
-      throw new IOException("Process " + command + " exited with " +
-          process.exitValue() +
-          "\n" + error.get() + "\n" + output.get() + "\n");
+    if (output != null) {
+      result = error.get() + "\n" + output.get();
+      LOG.debug(result);
     }
-    LOG.info(error.get() + "\n" + output.get() + "\n");
+    if (process.waitFor() != 0) {
+      throw new IOException("Process " + command + " exited with " + result);
+    }
   }
 
   /**
@@ -862,6 +877,38 @@ public class FileUtil {
       }
     } finally {
       IOUtils.cleanupWithLogger(LOG, tis, inputStream);
+    }
+  }
+
+  private static void unZipUsingJava(InputStream inputStream, File toDir)
+      throws IOException {
+    try (ZipInputStream zip = new ZipInputStream(inputStream)) {
+      int numOfFailedLastModifiedSet = 0;
+      do {
+        final ZipEntry entry = zip.getNextEntry();
+        if (entry == null) {
+          break;
+        }
+        if (!entry.isDirectory()) {
+          File file = new File(toDir, entry.getName());
+          File parent = file.getParentFile();
+          if (!parent.mkdirs() &&
+              !parent.isDirectory()) {
+            throw new IOException("Mkdirs failed to create " +
+                parent.getAbsolutePath());
+          }
+          try (OutputStream out = new FileOutputStream(file)) {
+            IOUtils.copyBytes(zip, out, BUFFER_SIZE);
+          }
+          if (!file.setLastModified(entry.getTime())) {
+            numOfFailedLastModifiedSet++;
+          }
+        }
+      } while (true);
+      if (numOfFailedLastModifiedSet > 0) {
+        LOG.warn("Could not set last modfied time for {} file(s)",
+            numOfFailedLastModifiedSet);
+      }
     }
   }
 

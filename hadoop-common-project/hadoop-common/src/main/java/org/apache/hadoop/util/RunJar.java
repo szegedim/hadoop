@@ -122,12 +122,7 @@ public class RunJar {
           File file = new File(toDir, entry.getName());
           ensureDirectory(file.getParentFile());
           try (OutputStream out = new FileOutputStream(file)) {
-            byte[] buf = new byte[BUFFER_SIZE];
-            int bytesRead = jar.read(buf);
-            while (bytesRead >= 0) {
-              out.write(buf, 0, bytesRead);
-              bytesRead = jar.read(buf);
-            }
+            IOUtils.copyBytes(jar, out, BUFFER_SIZE);
           }
           if (!file.setLastModified(entry.getTime())) {
             numOfFailedLastModifiedSet++;
