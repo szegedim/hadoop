@@ -90,10 +90,13 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+/**
+ * Unit test for the FSDownload class.
+ */
 @RunWith(Parameterized.class)
 public class TestFSDownload {
 
-  private static Boolean[] PARAMETERS = {false, true};
+  private static Boolean[] parameters = {false, true};
   private static final Log LOG = LogFactory.getLog(TestFSDownload.class);
   private static AtomicLong uniqueNumberGenerator =
     new AtomicLong(System.currentTimeMillis());
@@ -104,7 +107,7 @@ public class TestFSDownload {
 
   @Parameterized.Parameters(name = "{0}")
   public static Collection<Object[]> getParameters() {
-    return Arrays.stream(PARAMETERS).map(
+    return Arrays.stream(parameters).map(
         type -> new Object[]{type}).collect(Collectors.toList());
   }
 
