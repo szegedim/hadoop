@@ -287,14 +287,14 @@ public class FrameworkUploader implements Runnable {
         break;
       }
     }
-    if (ignoreSymlink) {
+    if (ignoreSymlink && Files.isSymbolicLink(jar.toPath())) {
       try {
         java.nio.file.Path link = Files.readSymbolicLink(jar.toPath());
         java.nio.file.Path jarPath = Paths.get(jar.getAbsolutePath());
         String linkString = link.toString();
-        if (!linkString.contains("/") ||
-            (linkString.startsWith("./") &&
-                !linkString.substring(2, linkString.length()).contains("/"))) {
+        java.nio.file.Path jarParent = jarPath.getParent();
+        if (jarParent.equals(
+            jarParent.resolve(linkString).getParent().normalize())) {
           excluded = true;
           LOG.info(String.format("Ignoring same directory link %s to %s",
               jarPath.toString(), link.toString()));
