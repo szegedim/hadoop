@@ -736,7 +736,7 @@ public class FileUtil {
     Future<String> output = null;
     Future<String> error = null;
     String result =
-        String.format("\nEnable debug logs on %s for details", LOG.getName());
+        String.format("%nEnable debug logs on %s for details", LOG.getName());
     if (LOG.isDebugEnabled()) {
       output = executor.submit(() -> {
         // Read until the output stream receives an EOF and closed.
