@@ -25,7 +25,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.security.PrivilegedExceptionAction;
-import java.util.LinkedList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -64,9 +63,7 @@ import com.google.common.util.concurrent.Futures;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 
-import static org.apache.hadoop.yarn.api.records.LocalResource.IGNORE_TIMESTAMP;
-
- /**
+/**
  * Download a single URL to the local disk.
  *
  */
@@ -75,7 +72,6 @@ public class FSDownload implements Callable<Path> {
 
   private static final Log LOG = LogFactory.getLog(FSDownload.class);
 
-  private ExecutorService executor;
   private FileContext files;
   private final UserGroupInformation userUgi;
   private Configuration conf;
@@ -108,10 +104,6 @@ public class FSDownload implements Callable<Path> {
     this.userUgi = ugi;
     this.resource = resource;
     this.statCache = statCache;
-    this.executor = Executors.newFixedThreadPool(
-        conf.getInt(YarnConfiguration.NM_DOWNLOADER_THREAD_COUNT,
-            YarnConfiguration.DEFAULT_NM_DOWNLOADER_THREAD_COUNT)
-    );
   }
 
   LocalResource getResource() {
@@ -282,8 +274,7 @@ public class FSDownload implements Callable<Path> {
     }
     FileSystem sourceFs = sCopy.getFileSystem(conf);
     FileStatus sStat = sourceFs.getFileStatus(sCopy);
-    if (resource.getTimestamp() != IGNORE_TIMESTAMP &&
-        sStat.getModificationTime() != resource.getTimestamp()) {
+    if (sStat.getModificationTime() != resource.getTimestamp()) {
       throw new IOException("Resource " + sCopy +
           " changed on src filesystem (expected " + resource.getTimestamp() +
           ", was " + sStat.getModificationTime());
@@ -297,7 +288,7 @@ public class FSDownload implements Callable<Path> {
     }
 
     try {
-      parallelCopy(sCopy, destination);
+      downloadAndUnpack(sCopy, destination);
     } catch (RuntimeException ex) {
       throw new YarnException("Parallel download failed", ex);
     }
@@ -308,28 +299,15 @@ public class FSDownload implements Callable<Path> {
    * @param source source path to copy. Typically HDFS
    * @param destination destination path. Typically local filesystem
    */
-  private void parallelCopy(Path source, Path destination) {
+  private void downloadAndUnpack(Path source, Path destination) {
     try {
       FileSystem sourceFileSystem = source.getFileSystem(conf);
       FileSystem destinationFileSystem = destination.getFileSystem(conf);
       if (sourceFileSystem.getFileStatus(source).isDirectory()) {
-        LinkedList<Future<?>> tasks = new LinkedList<>();
-        for (FileStatus child : sourceFileSystem.listStatus(source)) {
-          tasks.add(executor.submit(() -> parallelCopy(
-                child.getPath(),
-                new Path(destination, child.getPath().getName()))));
-        }
-        LinkedList<Exception> exceptions = new LinkedList<>();
-        for(Future<?> task: tasks) {
-          try {
-            task.get();
-          } catch (RuntimeException ex) {
-            exceptions.add(ex);
-          }
-        }
-        if (!exceptions.isEmpty()) {
-          throw new FSDownloadException("Localization failed", exceptions);
-        }
+        FileUtil.copy(
+            sourceFileSystem, source,
+            destinationFileSystem, destination, false,
+            true, conf);
       } else {
         unpack(source, destination, sourceFileSystem, destinationFileSystem);
       }
@@ -351,10 +329,12 @@ public class FSDownload implements Callable<Path> {
   private void unpack(Path source, Path destination,
                       FileSystem sourceFileSystem,
                       FileSystem destinationFileSystem)
-      throws IOException, InterruptedException, ExecutionException {
+      throws IOException, InterruptedException, YarnException,
+      ExecutionException {
     try (InputStream inputStream = sourceFileSystem.open(source)) {
       String destinationFile =
           StringUtils.toLowerCase(destination.getName());
+      boolean fallback = false;
       if (resource.getType() == LocalResourceType.PATTERN) {
         if (destinationFile.endsWith(".jar")) {
           // Unpack and keep a copy of the whole jar for mapreduce
@@ -367,14 +347,44 @@ public class FSDownload implements Callable<Path> {
           LOG.warn("Treating [" + source + "] " +
               "as an archive even though it " +
               "was specified as PATTERN");
+          fallback = true;
         }
       }
-      if (resource.getType() == LocalResourceType.ARCHIVE) {
-        if (FileUtil.decompress(
-            inputStream, source.getName(), destination, executor)) {
-          return;
-        } else {
-          LOG.warn("Cannot unpack [" + source + "] trying to copy");
+      if (resource.getType() == LocalResourceType.ARCHIVE || fallback) {
+        ExecutorService executor = null;
+        try {
+          // Set up an executor. We do it here in FSDownload,
+          // so that the thread count and other flats are
+          // FSDownload specific and not Hadoop general
+          int threadCount = conf.getInt(
+              YarnConfiguration.NM_DOWNLOADER_THREAD_COUNT,
+              YarnConfiguration.DEFAULT_NM_DOWNLOADER_THREAD_COUNT);
+          if (threadCount < 2) {
+            throw new YarnException("Thread count less than 2. This may hang.");
+          }
+          executor = Executors.newFixedThreadPool(threadCount);
+
+          boolean useOSCommand = conf.getBoolean(
+              YarnConfiguration.NM_DOWNLOADER_USE_OS_COMMAND,
+              YarnConfiguration.DEFAULT_NM_DOWNLOADER_USE_OS_COMMAND);
+
+          destinationFileSystem.delete(destination, true);
+          if (!destinationFileSystem.mkdirs(
+              destination, PRIVATE_DIR_PERMS)) {
+            throw new YarnException("Could not create " + destination);
+          }
+
+          if (FileUtil.decompress(
+              inputStream, destinationFile, destination,
+              executor, useOSCommand)) {
+            return;
+          } else {
+            LOG.warn("Cannot unpack [" + source + "] trying to copy");
+          }
+        } finally {
+          if (executor != null) {
+            executor.shutdown();
+          }
         }
       }
       // Fall back to copying
@@ -397,7 +407,7 @@ public class FSDownload implements Callable<Path> {
     }
 
     if (LOG.isDebugEnabled()) {
-      LOG.info(String.format("Starting to download %s %s %s",
+      LOG.debug(String.format("Starting to download %s %s %s",
           sCopy,
           resource.getType(),
           resource.getPattern()));
