@@ -294,9 +294,10 @@ public class FrameworkUploader implements Runnable {
         String linkString = link.toString();
         java.nio.file.Path jarParent = jarPath.getParent();
         java.nio.file.Path linkPath = jarParent.resolve(linkString);
+        java.nio.file.Path linkPathParent = linkPath.getParent();
         java.nio.file.Path normalizedLinkPath =
-            linkPath.getParent() == null ? null :
-                linkPath.getParent().normalize();
+            linkPathParent == null ? null :
+                linkPathParent.normalize();
         if (normalizedLinkPath != null && jarParent.equals(
             normalizedLinkPath)) {
           excluded = true;
