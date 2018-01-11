@@ -20,7 +20,6 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.monitor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resources.CombinedResourceCalculator;
 import org.apache.hadoop.yarn.server.nodemanager.metrics.NodeManagerMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,13 +34,11 @@ import org.apache.hadoop.yarn.api.records.ResourceUtilization;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.event.AsyncDispatcher;
 import org.apache.hadoop.yarn.event.Dispatcher;
-import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor;
 import org.apache.hadoop.yarn.server.nodemanager.Context;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerImpl;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerKillEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.resources.CGroupsResourceCalculator;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerExecutionException;
 import org.apache.hadoop.yarn.server.nodemanager.timelineservice.NMTimelinePublisher;
 import org.apache.hadoop.yarn.server.nodemanager.util.NodeManagerHardwareUtils;
@@ -228,63 +225,9 @@ public class ContainersMonitorImpl extends AbstractService implements
    */
   private ResourceCalculatorProcessTree
       getResourceCalculatorProcessTree(String pId) {
-    ResourceCalculatorProcessTree pt = null;
-
-    // Check, if CGroups is configured
-    if (processTreeClass == CGroupsResourceCalculator.class) {
-      if (CGroupsResourceCalculator.isAvailable()) {
-        try {
-          final CGroupsResourceCalculator cg =
-              new CGroupsResourceCalculator(pId);
-          cg.setCGroupFilePaths();
-          pt = cg;
-          if (!cgroupsLogged) {
-            cgroupsLogged = true;
-            LOG.info("CGroups is enabled, so using CGroupsResourceCalculator");
-          } else {
-            LOG.debug("CGroups is enabled, so using CGroupsResourceCalculator");
-          }
-        } catch (YarnException e) {
-          if (!cgroupsErrorLogged) {
-            cgroupsErrorLogged = true;
-            LOG.info("CGroupsResourceCalculator cannot be created", e);
-          } else {
-            LOG.debug("CGroupsResourceCalculator cannot be created", e);
-          }
-        }
-      } else {
-        LOG.info("CGroupsResourceCalculator is not available");
-      }
-    }
-
-    if (processTreeClass == CombinedResourceCalculator.class) {
-      try {
-        final CombinedResourceCalculator cg =
-            new CombinedResourceCalculator(pId);
-        cg.setCGroupFilePaths();
-        pt = cg;
-        if (!cgroupsLogged) {
-          cgroupsLogged = true;
-          LOG.info("CGroups is enabled, so using CombinedResourceCalculator");
-        } else {
-          LOG.debug("CGroups is enabled, so using CombinedResourceCalculator");
-        }
-      } catch (YarnException e) {
-        if (!cgroupsErrorLogged) {
-          cgroupsErrorLogged = true;
-          LOG.info("CombinedResourceCalculator cannot be created", e);
-        } else {
-          LOG.debug("CombinedResourceCalculator cannot be created", e);
-        }
-      }
-    }
-
-    if (pt == null) {
-      pt = ResourceCalculatorProcessTree.
-          getResourceCalculatorProcessTree(
-              pId, processTreeClass, conf);
-    }
-    return pt;
+    return ResourceCalculatorProcessTree.
+        getResourceCalculatorProcessTree(
+            pId, processTreeClass, conf);
   }
 
   private boolean isResourceCalculatorAvailable() {

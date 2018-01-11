@@ -40,7 +40,8 @@ public class CombinedResourceCalculator  extends ResourceCalculatorProcessTree {
     cgroup = new CGroupsResourceCalculator(pid);
   }
 
-  public void setCGroupFilePaths() throws YarnException {
+  @Override
+  public void initialize() throws YarnException {
     cgroup.setCGroupFilePaths();
   }
 

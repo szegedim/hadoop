@@ -139,6 +139,14 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   }
 
   @Override
+  public void initialize() throws YarnException {
+    if (!CGroupsResourceCalculator.isAvailable()) {
+      throw new YarnException("CGroupsResourceCalculator is not available");
+    }
+    setCGroupFilePaths();
+  }
+
+  @Override
   public float getCpuUsagePercent() {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Process " + pid + " jiffies:" + processTotalJiffies);
