@@ -48,7 +48,7 @@ public class TestCGroupsResourceCalculator {
   public void testPidNotFound() throws Exception {
     CGroupsResourceCalculator calculator =
         new CGroupsResourceCalculator(
-            "1234", ".", cGroupsHandler, clock);
+            "1234", ".", cGroupsHandler, clock, 10);
     calculator.setCGroupFilePaths();
     Assert.assertEquals("Expected exception", null, calculator);
   }
@@ -66,7 +66,7 @@ public class TestCGroupsResourceCalculator {
       CGroupsResourceCalculator calculator =
           new CGroupsResourceCalculator(
               "1234", basePath,
-              cGroupsHandler, clock);
+              cGroupsHandler, clock, 10);
       calculator.setCGroupFilePaths();
       Assert.assertEquals("Expected exception", null, calculator);
     } finally {
@@ -89,7 +89,7 @@ public class TestCGroupsResourceCalculator {
       CGroupsResourceCalculator calculator =
           new CGroupsResourceCalculator(
               "1234", basePath,
-              cGroupsHandler, clock);
+              cGroupsHandler, clock, 10);
       calculator.setCGroupFilePaths();
       calculator.updateProcessTree();
       Assert.assertEquals("cgroups should be missing",
@@ -127,7 +127,7 @@ public class TestCGroupsResourceCalculator {
       CGroupsResourceCalculator calculator =
           new CGroupsResourceCalculator(
               "1234", basePath,
-              cGroupsHandler, clock);
+              cGroupsHandler, clock, 10);
       calculator.setCGroupFilePaths();
       calculator.updateProcessTree();
       Assert.assertEquals("Incorrect CPU usage",
@@ -167,7 +167,7 @@ public class TestCGroupsResourceCalculator {
       CGroupsResourceCalculator calculator =
           new CGroupsResourceCalculator(
               "1234", basePath,
-              cGroupsHandler, clock);
+              cGroupsHandler, clock, 10);
       calculator.setCGroupFilePaths();
 
       calculator.updateProcessTree();
@@ -210,7 +210,7 @@ public class TestCGroupsResourceCalculator {
       CGroupsResourceCalculator calculator =
           new CGroupsResourceCalculator(
               null, basePath,
-              cGroupsHandler, clock);
+              cGroupsHandler, clock, 10);
       calculator.setCGroupFilePaths();
       calculator.updateProcessTree();
       Assert.assertEquals("Incorrect CPU usage",
@@ -246,7 +246,7 @@ public class TestCGroupsResourceCalculator {
       CGroupsResourceCalculator calculator =
           new CGroupsResourceCalculator(
               null, basePath,
-              cGroupsHandler, clock);
+              cGroupsHandler, clock, 10);
       calculator.setCGroupFilePaths();
 
       calculator.updateProcessTree();

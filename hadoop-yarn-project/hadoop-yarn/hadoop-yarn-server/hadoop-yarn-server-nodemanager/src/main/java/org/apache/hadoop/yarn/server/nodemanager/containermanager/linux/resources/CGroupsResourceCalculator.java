@@ -100,7 +100,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   public CGroupsResourceCalculator()
       throws YarnException {
     this(null, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
-        SystemClock.getInstance());
+        SystemClock.getInstance(), SysInfoLinux.JIFFY_LENGTH_IN_MILLIS);
   }
 
   /**
@@ -109,7 +109,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    */
   public CGroupsResourceCalculator(String pid) {
     this(pid, PROCFS, ResourceHandlerModule.getCGroupsHandler(),
-        SystemClock.getInstance());
+        SystemClock.getInstance(), SysInfoLinux.JIFFY_LENGTH_IN_MILLIS);
   }
 
   /**
@@ -118,19 +118,18 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
    * @param procfsDir Path to /proc or a mock /proc directory
    * @param cGroupsHandler Initialized cgroups handler object
    * @param clock A clock object
+   * @param jiffyLengthMs0 Jiffy length in milliseconds
    */
   @VisibleForTesting
   CGroupsResourceCalculator(String pid, String procfsDir,
-                            CGroupsHandler cGroupsHandler, Clock clock) {
+                            CGroupsHandler cGroupsHandler,
+                            Clock clock,
+                            long jiffyLengthMs0) {
     super(pid);
     this.procfsDir = procfsDir;
     this.cGroupsHandler = cGroupsHandler;
     this.pid = pid != null && pid.equals("0") ? "1" : pid;
-    // In case of a unit test we do not have system clock,
-    // and it might not run on Linux, so let's hard code
-    // the value to 10 in that case.
-    this.jiffyLengthMs = (clock == SystemClock.getInstance()) ?
-        SysInfoLinux.JIFFY_LENGTH_IN_MILLIS : 10;
+    this.jiffyLengthMs = jiffyLengthMs0;
     this.cpuTimeTracker =
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
@@ -178,6 +177,12 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
       cpuTimeTracker.updateElapsedJiffies(processTotalJiffies,
           clock.getTime());
     } catch (YarnException e) {
+      synchronized (LOCK) {
+        if (firstError) {
+          LOG.warn("Failed to parse " + pid, e);
+          firstError = false;
+        }
+      }
       LOG.debug(e.getMessage());
     }
     processPhysicalMemory = getMemorySize(memStat);
@@ -234,6 +239,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     } catch (YarnException e) {
       synchronized (LOCK) {
         if (firstError) {
+          // This is extremely helpful for debugging errors but
+          // it is usually enough once
           LOG.warn("Failed to parse cgroups " + memswStat, e);
           firstError = false;
         }
@@ -242,31 +249,21 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     return UNAVAILABLE;
   }
 
-  private BigInteger readTotalProcessJiffies() throws YarnException{
-    try {
-      final BigInteger[] totalCPUTimeJiffies = new BigInteger[1];
-      totalCPUTimeJiffies[0] = BigInteger.ZERO;
-      processFile(cpuStat, (String line) -> {
-        if (line.startsWith(USER)) {
-          totalCPUTimeJiffies[0] = totalCPUTimeJiffies[0].add(
-              new BigInteger(line.substring(USER.length())));
-        }
-        if (line.startsWith(SYSTEM)) {
-          totalCPUTimeJiffies[0] = totalCPUTimeJiffies[0].add(
-              new BigInteger(line.substring(SYSTEM.length())));
-        }
-        return Result.Continue;
-      });
-      return totalCPUTimeJiffies[0];
-    } catch (YarnException e) {
-      synchronized (LOCK) {
-        if (firstError) {
-          LOG.warn("Failed to parse " + pid, e);
-          firstError = false;
-        }
+  private BigInteger readTotalProcessJiffies() throws YarnException {
+    final BigInteger[] totalCPUTimeJiffies = new BigInteger[1];
+    totalCPUTimeJiffies[0] = BigInteger.ZERO;
+    processFile(cpuStat, (String line) -> {
+      if (line.startsWith(USER)) {
+        totalCPUTimeJiffies[0] = totalCPUTimeJiffies[0].add(
+            new BigInteger(line.substring(USER.length())));
       }
-      throw new YarnException("Cannot read process jiffies", e);
-    }
+      if (line.startsWith(SYSTEM)) {
+        totalCPUTimeJiffies[0] = totalCPUTimeJiffies[0].add(
+            new BigInteger(line.substring(SYSTEM.length())));
+      }
+      return Result.Continue;
+    });
+    return totalCPUTimeJiffies[0];
   }
 
   private String getCGroupRelativePath(

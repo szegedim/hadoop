@@ -35,7 +35,9 @@ import java.util.Random;
 import static org.mockito.Mockito.mock;
 
 /**
- * Unit test for CGroupsResourceCalculator.
+ * Functional test for CGroupsResourceCalculator to compare two resource
+ * calculators. It is OS dependent.
+ * Ignored in automated tests due to flakiness by design.
  */
 public class TestCompareResourceCalculators {
   private Process target = null;
