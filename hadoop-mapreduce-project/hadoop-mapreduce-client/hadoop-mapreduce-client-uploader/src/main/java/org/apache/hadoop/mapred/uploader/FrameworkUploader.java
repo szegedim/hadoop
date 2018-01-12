@@ -73,7 +73,15 @@ public class FrameworkUploader implements Runnable {
   @VisibleForTesting
   String target = null;
   @VisibleForTesting
-  short replication = 10;
+  Path targetPath = null;
+  @VisibleForTesting
+  short initialReplication = 3;
+  @VisibleForTesting
+  short finalReplication = 10;
+  @VisibleForTesting
+  short acceptableReplication = 9;
+  @VisibleForTesting
+  int timeout = 10;
   private boolean ignoreSymlink = false;
 
   @VisibleForTesting
@@ -101,7 +109,7 @@ public class FrameworkUploader implements Runnable {
       LOG.info(
           "Suggested mapreduce.application.classpath $PWD/" + alias + "/*");
       System.out.println("Suggested classpath $PWD/" + alias + "/*");
-    } catch (UploaderException|IOException e) {
+    } catch (UploaderException|IOException|InterruptedException e) {
       LOG.error("Error in execution " + e.getMessage());
       e.printStackTrace();
     }
@@ -147,7 +155,7 @@ public class FrameworkUploader implements Runnable {
     if (targetStream == null) {
       validateTargetPath();
       int lastIndex = target.indexOf('#');
-      Path targetPath =
+      targetPath =
           new Path(
               target.substring(
                   0, lastIndex == -1 ? target.length() : lastIndex));
@@ -160,7 +168,7 @@ public class FrameworkUploader implements Runnable {
       targetStream = null;
       if (fileSystem instanceof DistributedFileSystem) {
         LOG.info("Set replication to " +
-            replication + " for path: " + targetPath);
+            initialReplication + " for path: " + targetPath);
         LOG.info("Disabling Erasure Coding for path: " + targetPath);
         DistributedFileSystem dfs = (DistributedFileSystem)fileSystem;
         DistributedFileSystem.HdfsDataOutputStreamBuilder builder =
@@ -168,13 +176,13 @@ public class FrameworkUploader implements Runnable {
             .overwrite(true)
             .ecPolicyName(
                 SystemErasureCodingPolicies.getReplicationPolicy().getName());
-        if (replication > 0) {
-          builder.replication(replication);
+        if (initialReplication > 0) {
+          builder.replication(initialReplication);
         }
         targetStream = builder.build();
       } else {
         LOG.warn("Cannot set replication to " +
-            replication + " for path: " + targetPath +
+            initialReplication + " for path: " + targetPath +
             " on a non-distributed fileystem " +
             fileSystem.getClass().getName());
       }
@@ -190,8 +198,35 @@ public class FrameworkUploader implements Runnable {
     }
   }
 
+  private void endUpload()
+      throws IOException, InterruptedException {
+    FileSystem fileSystem = targetPath.getFileSystem(new Configuration());
+    if (fileSystem instanceof DistributedFileSystem) {
+      fileSystem.setReplication(targetPath, finalReplication);
+      LOG.info("Set replication to " +
+          finalReplication + " for path: " + targetPath);
+      long startTime = System.currentTimeMillis();
+      long endTime = startTime;
+      while(endTime - startTime < timeout * 1000 &&
+          fileSystem.getFileBlockLocations(
+              targetPath, 0, 1024).length < acceptableReplication) {
+        Thread.sleep(1000);
+        endTime = System.currentTimeMillis();
+      }
+      if (endTime - startTime >= timeout * 1000) {
+        LOG.error(String.format("Operation timed out in %d seconds", timeout));
+      }
+    } else {
+      LOG.info("Cannot set replication to " +
+          finalReplication + " for path: " + targetPath +
+          " on a non-distributed fileystem " +
+          fileSystem.getClass().getName());
+    }
+  }
+
   @VisibleForTesting
-  void buildPackage() throws IOException, UploaderException {
+  void buildPackage()
+      throws IOException, UploaderException, InterruptedException {
     beginUpload();
     LOG.info("Compressing tarball");
     try (TarArchiveOutputStream out = new TarArchiveOutputStream(
@@ -206,6 +241,7 @@ public class FrameworkUploader implements Runnable {
           out.closeArchiveEntry();
         }
       }
+      endUpload();
     } finally {
       if (targetStream != null) {
         targetStream.close();
@@ -378,8 +414,20 @@ public class FrameworkUploader implements Runnable {
         .hasArg().create("target"));
     opts.addOption(OptionBuilder
         .withDescription(
-            "Desired replication count")
-        .hasArg().create("replication"));
+            "Desired initial replication count")
+        .hasArg().create("initialReplication"));
+    opts.addOption(OptionBuilder
+        .withDescription(
+            "Desired final replication count")
+        .hasArg().create("finalReplication"));
+    opts.addOption(OptionBuilder
+        .withDescription(
+            "Desired acceptable replication count")
+        .hasArg().create("acceptableReplication"));
+    opts.addOption(OptionBuilder
+        .withDescription(
+            "Desired timeout in seconds")
+        .hasArg().create("timeout"));
     opts.addOption(OptionBuilder
         .withDescription("Ignore symlinks into the same directory")
         .create("nosymlink"));
@@ -395,8 +443,19 @@ public class FrameworkUploader implements Runnable {
         "whitelist", DefaultJars.DEFAULT_MR_JARS);
     blacklist = parser.getCommandLine().getOptionValue(
         "blacklist", DefaultJars.DEFAULT_EXCLUDED_MR_JARS);
-    replication = Short.parseShort(parser.getCommandLine().getOptionValue(
-        "replication", "10"));
+    initialReplication =
+        Short.parseShort(parser.getCommandLine().getOptionValue(
+            "initialReplication", "3"));
+    finalReplication =
+        Short.parseShort(parser.getCommandLine().getOptionValue(
+            "finalReplication", "10"));
+    acceptableReplication =
+        Short.parseShort(
+            parser.getCommandLine().getOptionValue(
+                "acceptableReplication", "9"));
+    timeout =
+        Integer.parseInt(
+            parser.getCommandLine().getOptionValue("timeout", "10"));
     if (parser.getCommandLine().hasOption("nosymlink")) {
       ignoreSymlink = true;
     }
