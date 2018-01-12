@@ -116,6 +116,7 @@ public class FrameworkUploader implements Runnable {
     } catch (UploaderException|IOException|InterruptedException e) {
       LOG.error("Error in execution " + e.getMessage());
       e.printStackTrace();
+      throw new RuntimeException(e);
     }
   }
 
