@@ -287,29 +287,8 @@ public class FrameworkUploader implements Runnable {
         break;
       }
     }
-    if (ignoreSymlink && Files.isSymbolicLink(jar.toPath())) {
-      try {
-        java.nio.file.Path link = Files.readSymbolicLink(jar.toPath());
-        java.nio.file.Path jarPath = Paths.get(jar.getAbsolutePath());
-        String linkString = link.toString();
-        java.nio.file.Path jarParent = jarPath.getParent();
-        java.nio.file.Path linkPath =
-            jarParent == null ? null : jarParent.resolve(linkString);
-        java.nio.file.Path linkPathParent =
-            linkPath == null ? null : linkPath.getParent();
-        java.nio.file.Path normalizedLinkPath =
-            linkPathParent == null ? null : linkPathParent.normalize();
-        if (normalizedLinkPath != null && jarParent.equals(
-            normalizedLinkPath)) {
-          excluded = true;
-          LOG.info(String.format("Ignoring same directory link %s to %s",
-              jarPath.toString(), link.toString()));
-        }
-      } catch (NotLinkException ex) {
-        LOG.debug("Not a link", jar);
-      } catch (IOException ex) {
-        LOG.warn("Cannot read symbolic link on", jar);
-      }
+    if (ignoreSymlink && !excluded) {
+      excluded = checkSymlink(jar);
     }
     if (found && !excluded) {
       LOG.info("Whitelisted " + jar.getAbsolutePath());
@@ -324,6 +303,40 @@ public class FrameworkUploader implements Runnable {
       LOG.info("Ignored " + jar.getAbsolutePath() + " because it is on " +
           "the the blacklist");
     }
+  }
+
+  /**
+   * Check if the file is a symlink to the same directory.
+   * @param jar The file to check
+   * @return true, to ignore the directory
+   */
+  @VisibleForTesting
+  boolean checkSymlink(File jar) {
+    if (Files.isSymbolicLink(jar.toPath())) {
+      try {
+        java.nio.file.Path link = Files.readSymbolicLink(jar.toPath());
+        java.nio.file.Path jarPath = Paths.get(jar.getAbsolutePath());
+        String linkString = link.toString();
+        java.nio.file.Path jarParent = jarPath.getParent();
+        java.nio.file.Path linkPath =
+            jarParent == null ? null : jarParent.resolve(linkString);
+        java.nio.file.Path linkPathParent =
+            linkPath == null ? null : linkPath.getParent();
+        java.nio.file.Path normalizedLinkPath =
+            linkPathParent == null ? null : linkPathParent.normalize();
+        if (normalizedLinkPath != null && jarParent.equals(
+            normalizedLinkPath)) {
+          LOG.info(String.format("Ignoring same directory link %s to %s",
+              jarPath.toString(), link.toString()));
+          return true;
+        }
+      } catch (NotLinkException ex) {
+        LOG.debug("Not a link", jar);
+      } catch (IOException ex) {
+        LOG.warn("Cannot read symbolic link on", jar);
+      }
+    }
+    return false;
   }
 
   private void validateTargetPath() throws UploaderException {
