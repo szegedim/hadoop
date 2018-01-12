@@ -25,6 +25,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.BlockLocation;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
@@ -43,6 +45,8 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.NotLinkException;
 import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -198,6 +202,34 @@ public class FrameworkUploader implements Runnable {
     }
   }
 
+  private long getReplication()
+      throws IOException {
+    FileSystem fileSystem = targetPath.getFileSystem(new Configuration());
+    FileStatus status = fileSystem.getFileStatus(targetPath);
+    long length = status.getLen();
+    HashMap<Long, Long> blockCount = new HashMap<Long, Long>();
+
+    // Start with 0s for each offset
+    for (long offset = 0; offset < length; offset +=status.getBlockSize()) {
+      blockCount.put(offset, 0L);
+    }
+
+    // Count blocks
+    for(BlockLocation location: fileSystem.getFileBlockLocations(
+        targetPath, 0, length)) {
+      blockCount.compute(
+          location.getOffset(), (key, value) -> value + 1L);
+    }
+
+    // Start with 0s for each offset
+    for (long offset = 0; offset < length; offset +=status.getBlockSize()) {
+      LOG.info(String.format(
+          "Replication counts offset:%d blocks:%d",
+          offset, blockCount.get(offset)));
+    }
+
+    return Collections.min(blockCount.values());
+  }
   private void endUpload()
       throws IOException, InterruptedException {
     FileSystem fileSystem = targetPath.getFileSystem(new Configuration());
@@ -207,14 +239,15 @@ public class FrameworkUploader implements Runnable {
           finalReplication + " for path: " + targetPath);
       long startTime = System.currentTimeMillis();
       long endTime = startTime;
+      long currentReplication = 0;
       while(endTime - startTime < timeout * 1000 &&
-          fileSystem.getFileBlockLocations(
-              targetPath, 0, 1024).length < acceptableReplication) {
+           currentReplication < acceptableReplication) {
         Thread.sleep(1000);
         endTime = System.currentTimeMillis();
+        currentReplication = getReplication();
       }
       if (endTime - startTime >= timeout * 1000) {
-        LOG.error(String.format("Operation timed out in %d seconds", timeout));
+        LOG.error(String.format("Timed out after %d seconds while waiting for acceptable replication of %d (current replication is %d)", timeout, acceptableReplication, currentReplication));
       }
     } else {
       LOG.info("Cannot set replication to " +
@@ -414,19 +447,20 @@ public class FrameworkUploader implements Runnable {
         .hasArg().create("target"));
     opts.addOption(OptionBuilder
         .withDescription(
-            "Desired initial replication count")
+            "Desired initial replication count. Default 3.")
         .hasArg().create("initialReplication"));
     opts.addOption(OptionBuilder
         .withDescription(
-            "Desired final replication count")
+            "Desired final replication count. Default 10.")
         .hasArg().create("finalReplication"));
     opts.addOption(OptionBuilder
         .withDescription(
-            "Desired acceptable replication count")
+            "Desired acceptable replication count. Default 9.")
         .hasArg().create("acceptableReplication"));
     opts.addOption(OptionBuilder
         .withDescription(
-            "Desired timeout in seconds")
+            "Desired timeout for the acceptable" +
+                " replication in seconds. Default 10")
         .hasArg().create("timeout"));
     opts.addOption(OptionBuilder
         .withDescription("Ignore symlinks into the same directory")
