@@ -92,9 +92,6 @@ public class ContainersMonitorImpl extends AbstractService implements
   private static final long UNKNOWN_MEMORY_LIMIT = -1L;
   private int nodeCpuPercentageForYARN;
 
-  private boolean cgroupsLogged = false;
-  private boolean cgroupsErrorLogged = false;
-
   /**
    * Type of container metric.
    */

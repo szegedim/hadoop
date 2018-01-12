@@ -42,7 +42,8 @@ public class CombinedResourceCalculator  extends ResourceCalculatorProcessTree {
 
   @Override
   public void initialize() throws YarnException {
-    cgroup.setCGroupFilePaths();
+    procfs.initialize();
+    cgroup.initialize();
   }
 
   @Override
@@ -53,7 +54,7 @@ public class CombinedResourceCalculator  extends ResourceCalculatorProcessTree {
 
   @Override
   public String getProcessTreeDump() {
-    return null;
+    return procfs.getProcessTreeDump();
   }
 
   @Override

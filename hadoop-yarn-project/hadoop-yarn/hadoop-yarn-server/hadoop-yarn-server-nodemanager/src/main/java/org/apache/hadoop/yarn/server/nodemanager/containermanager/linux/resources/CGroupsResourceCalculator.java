@@ -91,9 +91,6 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
   private final CpuTimeTracker cpuTimeTracker;
   private Clock clock;
 
-  private final static Object LOCK = new Object();
-  private static boolean firstError = true;
-
   /**
    * Create resource calculator for all Yarn containers.
    */
@@ -185,13 +182,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
       cpuTimeTracker.updateElapsedJiffies(processTotalJiffies,
           clock.getTime());
     } catch (YarnException e) {
-      synchronized (LOCK) {
-        if (firstError) {
-          LOG.warn("Failed to parse " + pid, e);
-          firstError = false;
-        }
-      }
-      LOG.debug(e.getMessage());
+      LOG.warn("Failed to parse " + pid, e);
     }
     processPhysicalMemory = getMemorySize(memStat);
     processVirtualMemory = getMemorySize(memswStat);
@@ -245,14 +236,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
       });
       return mem[0];
     } catch (YarnException e) {
-      synchronized (LOCK) {
-        if (firstError) {
-          // This is extremely helpful for debugging errors but
-          // it is usually enough once
-          LOG.warn("Failed to parse cgroups " + memswStat, e);
-          firstError = false;
-        }
-      }
+      LOG.warn("Failed to parse cgroups " + memswStat, e);
     }
     return UNAVAILABLE;
   }
@@ -348,7 +332,7 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
     }
   }
 
-  public void setCGroupFilePaths() throws YarnException {
+  void setCGroupFilePaths() throws YarnException {
     if (cGroupsHandler == null) {
       throw new YarnException("CGroups handler is not initialized");
     }
