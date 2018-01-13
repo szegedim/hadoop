@@ -203,25 +203,25 @@ public class FrameworkUploader implements Runnable {
     }
   }
 
-  private long getReplication()
+  private long getSmallestReplicatedBlockCount()
       throws IOException {
     FileSystem fileSystem = targetPath.getFileSystem(new Configuration());
     FileStatus status = fileSystem.getFileStatus(targetPath);
     long length = status.getLen();
-    HashMap<Long, Long> blockCount = new HashMap<Long, Long>();
+    HashMap<Long, Integer> blockCount = new HashMap<>();
 
     // Start with 0s for each offset
     for (long offset = 0; offset < length; offset +=status.getBlockSize()) {
-      blockCount.put(offset, 0L);
+      blockCount.put(offset, 0);
     }
 
     // Count blocks
     BlockLocation[] locations = fileSystem.getFileBlockLocations(
         targetPath, 0, length);
-    LOG.info(locations.toString());
     for(BlockLocation location: locations) {
+      final int replicas = location.getHosts().length;
       blockCount.compute(
-          location.getOffset(), (key, value) -> value + 1L);
+          location.getOffset(), (key, value) -> value + replicas);
     }
 
     // Print out the results
@@ -248,10 +248,13 @@ public class FrameworkUploader implements Runnable {
            currentReplication < acceptableReplication) {
         Thread.sleep(1000);
         endTime = System.currentTimeMillis();
-        currentReplication = getReplication();
+        currentReplication = getSmallestReplicatedBlockCount();
       }
       if (endTime - startTime >= timeout * 1000) {
-        LOG.error(String.format("Timed out after %d seconds while waiting for acceptable replication of %d (current replication is %d)", timeout, acceptableReplication, currentReplication));
+        LOG.error(String.format(
+            "Timed out after %d seconds while waiting for acceptable" +
+                " replication of %d (current replication is %d)",
+            timeout, acceptableReplication, currentReplication));
       }
     } else {
       LOG.info("Cannot set replication to " +
