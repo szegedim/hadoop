@@ -216,13 +216,15 @@ public class FrameworkUploader implements Runnable {
     }
 
     // Count blocks
-    for(BlockLocation location: fileSystem.getFileBlockLocations(
-        targetPath, 0, length)) {
+    BlockLocation[] locations = fileSystem.getFileBlockLocations(
+        targetPath, 0, length);
+    LOG.info(locations.toString());
+    for(BlockLocation location: locations) {
       blockCount.compute(
           location.getOffset(), (key, value) -> value + 1L);
     }
 
-    // Start with 0s for each offset
+    // Print out the results
     for (long offset = 0; offset < length; offset +=status.getBlockSize()) {
       LOG.info(String.format(
           "Replication counts offset:%d blocks:%d",
@@ -231,6 +233,7 @@ public class FrameworkUploader implements Runnable {
 
     return Collections.min(blockCount.values());
   }
+
   private void endUpload()
       throws IOException, InterruptedException {
     FileSystem fileSystem = targetPath.getFileSystem(new Configuration());
