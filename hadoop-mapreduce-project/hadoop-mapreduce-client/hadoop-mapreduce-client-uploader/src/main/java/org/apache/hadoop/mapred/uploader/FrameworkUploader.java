@@ -69,7 +69,7 @@ public class FrameworkUploader implements Runnable {
       Pattern.compile(Shell.getEnvironmentVariableRegex());
   private static final Logger LOG =
       LoggerFactory.getLogger(FrameworkUploader.class);
-  Configuration conf = new Configuration();
+  private Configuration conf = new Configuration();
 
   @VisibleForTesting
   String input = null;

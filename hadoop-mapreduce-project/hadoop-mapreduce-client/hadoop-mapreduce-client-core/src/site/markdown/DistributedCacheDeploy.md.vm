@@ -53,7 +53,7 @@ Deploying a new MapReduce version consists of three steps:
     filesystem at a publicly-readable path. See the archive location discussion
     below for more details. You can use the framework uploader tool to perform
     this step like
-    `mapred frameworkuploader -target 
+    `mapred frameworkuploader -target
     /usr/lib/hadoop-mapreduce-${project.version}.tar#mrframework`.
     It will select the jar files that are in the classpath and put them into
     a tar archive specified by the -target and -fs options. The tool then returns
@@ -61,9 +61,9 @@ Deploying a new MapReduce version consists of three steps:
     `mapreduce.application.classpath`.
 
     -fs: The target file system. Defaults to the default filesystem set by fs.defaultFS.
-    
+
     -target is the target location of the framework tarball, optionally followed
-     by a # with the localized alias. It then uploads the tar to the specified 
+     by a # with the localized alias. It then uploads the tar to the specified
      directory. gzip is not needed since the jar files are already compressed.
      Make sure the target directory is readable by all users but it is not
      writable by others than administrators to protect cluster security.
@@ -78,7 +78,7 @@ Deploying a new MapReduce version consists of three steps:
 
 3.  Configure `mapreduce.application.classpath` to set the proper
     classpath to use with the MapReduce archive configured above.
-    If the `frameworkuploader` tool is used, it uploads all dependencies 
+    If the `frameworkuploader` tool is used, it uploads all dependencies
     and returns the value that needs to be configured here. NOTE: An error
     occurs if `mapreduce.application.framework.path` is configured but
     `mapreduce.application.classpath` does not reference the base name of the
@@ -95,9 +95,9 @@ When working with a large cluster it can be important to increase the replicatio
 The `frameworkuploader` tool mentioned above has additional parameters that help to adjust performance:
 
 -initialReplication: This is the replication count that the framework tarball is created with. It is safe to leave this value at the default 3. This is the tested scenario.
- 
+
 -finalReplication: The uploader tool sets the replication once all blocks are collected and uploaded. If quick initial startup is required, then it is advised to set this to the commissioned node count divided by two but not more than 512. This will leverage HDFS to spread the tarball in a distributed manner. Once the jobs start they will likely hit a local HDFS node to localize from or they can select from a wide set of additional source nodes. If this value is set to low like a constant 10, then the output bandwidth of those replicated nodes will affect how fast the first job will run. The replication count can be manually reduced to a low value like 10 once all the jobs started in the cluster to save disk space.
-  
+
 -acceptableReplication: This should be a replication count less than or equal to the value in `finalReplication`. This is typically a 90% of the value in `finalReplication` to accomodate failing nodes.
 
 -timeout: A timeout in seconds to wait to reach `acceptableReplication` before the tool exits. The tool logs an error otherwise and returns.
