@@ -30,8 +30,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -50,14 +48,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
-import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
 import org.apache.hadoop.yarn.api.records.URL;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.junit.Assert;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -87,15 +83,12 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 /**
  * Unit test for the FSDownload class.
  */
 public class TestFSDownload {
 
-  private static Boolean[] parameters = {false, true};
   private static final Log LOG = LogFactory.getLog(TestFSDownload.class);
   private static AtomicLong uniqueNumberGenerator =
     new AtomicLong(System.currentTimeMillis());
@@ -568,9 +561,6 @@ public class TestFSDownload {
       InterruptedException {
     downloadWithFileType(TEST_FILE_TYPE.ZIP);
   }
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   /*
    * To test fix for YARN-3029

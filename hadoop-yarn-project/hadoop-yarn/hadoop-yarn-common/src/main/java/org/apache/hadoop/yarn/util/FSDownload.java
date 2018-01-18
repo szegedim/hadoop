@@ -27,8 +27,6 @@ import java.net.URISyntaxException;
 import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
@@ -53,7 +51,6 @@ import org.apache.hadoop.util.RunJar;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.records.LocalResource;
-import org.apache.hadoop.yarn.api.records.LocalResourceType;
 import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -255,7 +252,7 @@ public class FSDownload implements Callable<Path> {
   }
 
   /**
-   * Use asynchronous calls and streaming to localize files.
+   * Localize files.
    * @param destination destination directory
    * @throws IOException cannot read or write file
    * @throws YarnException subcommand returned an error
@@ -350,11 +347,11 @@ public class FSDownload implements Callable<Path> {
       case PATTERN:
         if (lowerDst.endsWith(".jar")) {
           String p = resource.getPattern();
-          RunJar.unJarAndSave(inputStream, dst, source.getName(),
-              p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
           if (!dst.exists() && !dst.mkdir()) {
             throw new IOException("Unable to create directory: [" + dst + "]");
           }
+          RunJar.unJarAndSave(inputStream, dst, source.getName(),
+              p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
         } else if (lowerDst.endsWith(".zip")) {
           LOG.warn("Treating [" + source + "] as an archive even though it " +
               "was specified as PATTERN");

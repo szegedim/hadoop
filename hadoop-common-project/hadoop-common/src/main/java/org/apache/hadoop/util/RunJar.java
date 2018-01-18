@@ -100,7 +100,7 @@ public class RunJar {
    * Unpack matching files from a jar. Entries inside the jar that do
    * not match the given pattern will be skipped.
    *
-   * @param jarFile the .jar file to unpack
+   * @param jarFile the jar stream to unpack
    * @param toDir the destination directory into which to unpack the jar
    * @param unpackRegex the pattern to match jar entries against
    *
@@ -139,15 +139,17 @@ public class RunJar {
   /**
    * Unpack matching files from a jar. Entries inside the jar that do
    * not match the given pattern will be skipped. Keep also a copy
-   * of the entire jar in the same directory
+   * of the entire jar in the same directory for backward compatibility.
+   * TODO remove this feature in a new release and do only unJar
    *
-   * @param jarFile the .jar file to unpack
+   * @param jarFile the jar stream to unpack
    * @param toDir the destination directory into which to unpack the jar
    * @param unpackRegex the pattern to match jar entries against
    *
    * @throws IOException if an I/O error has occurred or toDir
    * cannot be created and does not already exist
    */
+  @Deprecated
   public static void unJarAndSave(InputStream jarFile, File toDir,
                            String name, Pattern unpackRegex)
       throws IOException{
