@@ -169,7 +169,6 @@ public class TestFrameworkUploader {
   public void testExplicitFilesystem() throws IOException {
     FrameworkUploader uploader = new FrameworkUploader();
     Configuration conf = new Configuration();
-    conf.set(FS_DEFAULT_NAME_KEY, "hdfs://namenode:555");
     uploader.setConf(conf);
     boolean success = uploader.parseArguments(new String[]{
         "-target",
@@ -179,6 +178,26 @@ public class TestFrameworkUploader {
     Assert.assertEquals(
         "Expected",
         "hdfs://namenode:555/usr/lib/mr-framework.tar.gz#mr-framework",
+        uploader.target);
+  }
+
+  /**
+   * Test the conflicting filesystem specification.
+   */
+  @Test
+  public void testConflictingFilesystem() throws IOException {
+    FrameworkUploader uploader = new FrameworkUploader();
+    Configuration conf = new Configuration();
+    conf.set(FS_DEFAULT_NAME_KEY, "hdfs://namenode:555");
+    uploader.setConf(conf);
+    boolean success = uploader.parseArguments(new String[]{
+        "-target",
+        "file:///usr/lib/mr-framework.tar.gz#mr-framework"
+    });
+    Assert.assertTrue("Expected to parse arguments", success);
+    Assert.assertEquals(
+        "Expected",
+        "file:///usr/lib/mr-framework.tar.gz#mr-framework",
         uploader.target);
   }
 
