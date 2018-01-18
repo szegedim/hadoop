@@ -60,7 +60,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.Futures;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 
 /**
@@ -259,13 +258,10 @@ public class FSDownload implements Callable<Path> {
    * Use asynchronous calls and streaming to localize files.
    * @param destination destination directory
    * @throws IOException cannot read or write file
-   * @throws InterruptedException operation interrupted
-   * @throws ExecutionException thread pool error
    * @throws YarnException subcommand returned an error
    */
-  private void parallelVerifyAndCopy(Path destination)
-      throws IOException, InterruptedException,
-      ExecutionException, YarnException {
+  private void verifyAndCopy(Path destination)
+      throws IOException, YarnException {
     final Path sCopy;
     try {
       sCopy = resource.getResource().toPath();
@@ -325,76 +321,69 @@ public class FSDownload implements Callable<Path> {
    * @throws IOException Could not read or write stream
    * @throws InterruptedException Operation interrupted by caller
    * @throws ExecutionException Could not create thread pool execution
-  */
+   */
   private void unpack(Path source, Path destination,
                       FileSystem sourceFileSystem,
                       FileSystem destinationFileSystem)
-      throws IOException, InterruptedException, YarnException,
-      ExecutionException {
+      throws IOException, InterruptedException, ExecutionException {
     try (InputStream inputStream = sourceFileSystem.open(source)) {
-      String destinationFile =
-          StringUtils.toLowerCase(destination.getName());
-      boolean fallback = false;
-      if (resource.getType() == LocalResourceType.PATTERN) {
-        if (destinationFile.endsWith(".jar")) {
-          // Unpack and keep a copy of the whole jar for mapreduce
-          String p = resource.getPattern();
-          RunJar.unJarAndSave(inputStream, new File(destination.toUri()),
-              source.getName(),
-              p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
-          return;
+      File dst = new File(destination.toUri());
+      String lowerDst = StringUtils.toLowerCase(dst.getName());
+      switch (resource.getType()) {
+      case ARCHIVE:
+        if (lowerDst.endsWith(".jar")) {
+          RunJar.unJar(inputStream, dst, RunJar.MATCH_ANY);
+        } else if (lowerDst.endsWith(".zip")) {
+          FileUtil.unZip(inputStream, dst);
+        } else if (lowerDst.endsWith(".tar.gz") ||
+            lowerDst.endsWith(".tgz") ||
+            lowerDst.endsWith(".tar")) {
+          FileUtil.unTar(inputStream, dst, lowerDst.endsWith("gz"));
         } else {
-          LOG.warn("Treating [" + source + "] " +
-              "as an archive even though it " +
+          LOG.warn("Cannot unpack " + source);
+          try (OutputStream outputStream =
+                   destinationFileSystem.create(destination, true)) {
+            IOUtils.copy(inputStream, outputStream);
+          }
+        }
+        break;
+      case PATTERN:
+        if (lowerDst.endsWith(".jar")) {
+          String p = resource.getPattern();
+          RunJar.unJarAndSave(inputStream, dst, source.getName(),
+              p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
+          if (!dst.exists() && !dst.mkdir()) {
+            throw new IOException("Unable to create directory: [" + dst + "]");
+          }
+        } else if (lowerDst.endsWith(".zip")) {
+          LOG.warn("Treating [" + source + "] as an archive even though it " +
               "was specified as PATTERN");
-          fallback = true;
-        }
-      }
-      if (resource.getType() == LocalResourceType.ARCHIVE || fallback) {
-        ExecutorService executor = null;
-        try {
-          // Set up an executor. We do it here in FSDownload,
-          // so that the thread count and other flats are
-          // FSDownload specific and not Hadoop general
-          int threadCount = conf.getInt(
-              YarnConfiguration.NM_DOWNLOADER_THREAD_COUNT,
-              YarnConfiguration.DEFAULT_NM_DOWNLOADER_THREAD_COUNT);
-          if (threadCount < 2) {
-            throw new YarnException("Thread count less than 2. This may hang.");
-          }
-          executor = Executors.newFixedThreadPool(threadCount);
-
-          boolean useOSCommand = conf.getBoolean(
-              YarnConfiguration.NM_DOWNLOADER_USE_OS_COMMAND,
-              YarnConfiguration.DEFAULT_NM_DOWNLOADER_USE_OS_COMMAND);
-
-          destinationFileSystem.delete(destination, true);
-          if (!destinationFileSystem.mkdirs(
-              destination, PRIVATE_DIR_PERMS)) {
-            throw new YarnException("Could not create " + destination);
-          }
-
-          if (FileUtil.decompress(
-              inputStream, destinationFile, destination,
-              executor, useOSCommand)) {
-            return;
-          } else {
-            LOG.warn("Cannot unpack [" + source + "] trying to copy");
-          }
-        } finally {
-          if (executor != null) {
-            executor.shutdown();
+          FileUtil.unZip(inputStream, dst);
+        } else if (lowerDst.endsWith(".tar.gz") ||
+            lowerDst.endsWith(".tgz") ||
+            lowerDst.endsWith(".tar")) {
+          LOG.warn("Treating [" + source + "] as an archive even though it " +
+              "was specified as PATTERN");
+          FileUtil.unTar(inputStream, dst, lowerDst.endsWith("gz"));
+        } else {
+          LOG.warn("Cannot unpack " + source);
+          try (OutputStream outputStream =
+                   destinationFileSystem.create(destination, true)) {
+            IOUtils.copy(inputStream, outputStream);
           }
         }
+        break;
+      case FILE:
+      default:
+        try (OutputStream outputStream =
+                 destinationFileSystem.create(destination, true)) {
+          IOUtils.copy(inputStream, outputStream);
+        }
+        break;
       }
-      // Fall back to copying
-      try (OutputStream outputStream =
-               destinationFileSystem.create(destination, true)) {
-        IOUtils.copy(inputStream, outputStream);
-      }
+      // TODO Should calculate here before returning
+      //return FileUtil.getDU(destDir);
     }
-    // TODO Should calculate here before returning
-    //return FileUtil.getDU(destDir);
   }
 
   @Override
@@ -413,24 +402,24 @@ public class FSDownload implements Callable<Path> {
           resource.getPattern()));
     }
 
-    final Path destionationTmp = new Path(destDirPath + "_tmp");
-    createDir(destionationTmp, PRIVATE_DIR_PERMS);
+    final Path destinationTmp = new Path(destDirPath + "_tmp");
+    createDir(destinationTmp, PRIVATE_DIR_PERMS);
     Path dFinal =
-        files.makeQualified(new Path(destionationTmp, sCopy.getName()));
+        files.makeQualified(new Path(destinationTmp, sCopy.getName()));
     try {
       if (userUgi == null) {
-        parallelVerifyAndCopy(dFinal);
+        verifyAndCopy(dFinal);
       } else {
         userUgi.doAs(new PrivilegedExceptionAction<Void>() {
           @Override
           public Void run() throws Exception {
-            parallelVerifyAndCopy(dFinal);
+            verifyAndCopy(dFinal);
             return null;
           }
         });
       }
       changePermissions(dFinal.getFileSystem(conf), dFinal);
-      files.rename(destionationTmp, destDirPath, Rename.OVERWRITE);
+      files.rename(destinationTmp, destDirPath, Rename.OVERWRITE);
 
       if (LOG.isDebugEnabled()) {
         LOG.debug(String.format("File has been downloaded to %s from %s",
@@ -444,7 +433,7 @@ public class FSDownload implements Callable<Path> {
       throw e;
     } finally {
       try {
-        files.delete(destionationTmp, true);
+        files.delete(destinationTmp, true);
       } catch (FileNotFoundException ignore) {
       }
       conf = null;

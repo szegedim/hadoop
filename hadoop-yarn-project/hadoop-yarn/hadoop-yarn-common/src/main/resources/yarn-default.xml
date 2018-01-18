@@ -3623,19 +3623,4 @@
     <value></value>
   </property>
 
-  <property>
-    <description>
-      Localizer thread count. It should be a minimum of 2.
-    </description>
-    <name>yarn.nodemanager.downloader.thread.count</name>
-    <value>10</value>
-  </property>
-
-  <property>
-    <description>
-      It specifies whether the localizer should use OS commands to extract archives.
-    </description>
-    <name>yarn.nodemanager.downloader.use-os-command</name>
-    <value>false</value>
-  </property>
 </configuration>

@@ -587,6 +587,45 @@ public class FileUtil {
   }
 
   /**
+   * Given a File input it will unzip the file in a the unzip directory.
+   * passed as the second parameter
+   * @param inputStream The zip file as input
+   * @param toDir The unzip directory where to unzip the zip file.
+   * @throws IOException an exception occurred
+   */
+  public static void unZip(InputStream inputStream, File toDir)
+      throws IOException {
+    try (ZipInputStream zip = new ZipInputStream(inputStream)) {
+      int numOfFailedLastModifiedSet = 0;
+      do {
+        final ZipEntry entry = zip.getNextEntry();
+        if (entry == null) {
+          break;
+        }
+        if (!entry.isDirectory()) {
+          File file = new File(toDir, entry.getName());
+          File parent = file.getParentFile();
+          if (!parent.mkdirs() &&
+              !parent.isDirectory()) {
+            throw new IOException("Mkdirs failed to create " +
+                parent.getAbsolutePath());
+          }
+          try (OutputStream out = new FileOutputStream(file)) {
+            IOUtils.copyBytes(zip, out, BUFFER_SIZE);
+          }
+          if (!file.setLastModified(entry.getTime())) {
+            numOfFailedLastModifiedSet++;
+          }
+        }
+      } while (true);
+      if (numOfFailedLastModifiedSet > 0) {
+        LOG.warn("Could not set last modfied time for {} file(s)",
+            numOfFailedLastModifiedSet);
+      }
+    }
+  }
+
+  /**
    * Given a File input it will unzip the file in a the unzip directory
    * passed as the second parameter
    * @param inFile The zip file as input
@@ -632,104 +671,20 @@ public class FileUtil {
   }
 
   /**
-   * Decompress the given stream with file name name to the destination path.
-   * @param inputStream compressed data
-   * @param name file name ending with the compression type like tar.gz
-   * @param destination Destination path
-   * @param executorService Optional thread pool service
-   * @param useOSCommand Whether to use OS commands to decompress
-   * @return Whether this is a compressed file and decompression was successful
-   * @throws IOException Could not read or write data
-   * @throws InterruptedException Operation interrupted
-   * @throws ExecutionException Could not submit thread pool items
-   */
-  public static boolean decompress(
-      InputStream inputStream,
-      String name,
-      Path destination,
-      ExecutorService executorService,
-      boolean useOSCommand)
-      throws IOException, InterruptedException, ExecutionException {
-    String fileName =
-        StringUtils.toLowerCase(name);
-    String destinationPath =
-        new File(destination.toUri()).getAbsolutePath();
-    if (destinationPath.contains("'")) {
-      throw new IOException("Invalid path " + destinationPath +
-          ". Possible code injection attack");
-    }
-    StringBuilder command = new StringBuilder();
-    boolean isGzipped = fileName.endsWith(".gz");
-    boolean isTar =
-        fileName.endsWith(".tar") ||
-        fileName.endsWith(".tar.gz") ||
-        fileName.endsWith(".tgz");
-    boolean isZip = fileName.endsWith(".zip");
-    boolean isJar = fileName.endsWith(".jar");
-    String verbose = LOG.isDebugEnabled() ? "v" : "";
-
-    if(Shell.WINDOWS || !useOSCommand) {
-      if (isTar) {
-        unTarUsingJava(inputStream,
-            new File(destination.toUri()), isGzipped);
-        return true;
-      } else if (isZip) {
-        unZipUsingJava(inputStream,
-            new File(destination.toUri()));
-        return true;
-      } else if (isJar) {
-        RunJar.unJar(
-            inputStream, new File(destination.toUri()), RunJar.MATCH_ANY);
-        return true;
-      }
-    } else {
-      if (isGzipped) {
-        command.append("gzip -dc | ");
-      }
-      if (isTar) {
-        command
-            .append("(")
-            .append("cd '")
-            .append(destinationPath)
-            .append("' &&")
-            .append("tar -x")
-            .append(verbose)
-            .append(")");
-      } else if (isZip || isJar) {
-        command
-            .append("(")
-            .append("cd '")
-            .append(destinationPath)
-            .append("'&&")
-            .append("jar x")
-            .append(verbose)
-            .append(")");
-      }
-      if (!command.toString().isEmpty()) {
-        runCommandOnStream(inputStream, executorService, command.toString());
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
    * Run a command and send the contents of an input stream to it.
    * @param inputStream Input stream to forward to the shell command
-   * @param executor0 Optional executor
    * @param command shell command to run
+   * @return the exit code
    * @throws IOException read or write failed
    * @throws InterruptedException command interrupted
    * @throws ExecutionException task submit failed
    */
-  private static void runCommandOnStream(
-      InputStream inputStream, ExecutorService executor0, String command)
+  private static int runCommandOnStream(
+      InputStream inputStream, String command)
       throws IOException, InterruptedException, ExecutionException {
     String shell = Shell.WINDOWS ? "cmd" : "bash";
     String cmdSwitch = Shell.WINDOWS ? "/c" : "-c";
-    ExecutorService executor =
-        executor0 != null ? executor0 :
-            Executors.newFixedThreadPool(2);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
     ProcessBuilder builder = new ProcessBuilder();
     builder.command(shell, cmdSwitch, command);
     Process process = builder.start();
@@ -771,8 +726,40 @@ public class FileUtil {
       result = error.get() + "\n" + output.get();
       LOG.debug(result);
     }
-    if (process.waitFor() != 0) {
-      throw new IOException("Process " + command + " exited with " + result);
+    return process.waitFor();
+  }
+
+  /**
+   * Given a Tar File as input it will untar the file in a the untar directory
+   * passed as the second parameter
+   *
+   * This utility will untar ".tar" files and ".tar.gz","tgz" files.
+   *
+   * @param inputStream The tar file as input.
+   * @param untarDir The untar directory where to untar the tar file.
+   * @param gzipped The input stream is gzipped
+   *                TODO Use magic number and PusbackInputStream to identify
+   * @throws IOException an exception occurred
+   * @throws InterruptedException command interrupted
+   * @throws ExecutionException task submit failed
+   */
+  public static void unTar(InputStream inputStream, File untarDir,
+                           boolean gzipped)
+      throws IOException, InterruptedException, ExecutionException {
+    if (!untarDir.mkdirs()) {
+      if (!untarDir.isDirectory()) {
+        throw new IOException("Mkdirs failed to create " + untarDir);
+      }
+    }
+
+    if(Shell.WINDOWS) {
+      // Tar is not native to Windows. Use simple Java based implementation for
+      // tests and simple tar archives
+      unTarUsingJava(inputStream, untarDir, gzipped);
+    } else {
+      // spawn tar utility to untar archive for full fledged unix behavior such
+      // as resolving symlinks in tar archives
+      unTarUsingTar(inputStream, untarDir, gzipped);
     }
   }
 
@@ -803,6 +790,28 @@ public class FileUtil {
       // spawn tar utility to untar archive for full fledged unix behavior such
       // as resolving symlinks in tar archives
       unTarUsingTar(inFile, untarDir, gzipped);
+    }
+  }
+
+  private static void unTarUsingTar(InputStream inFile, File untarDir,
+                                    boolean gzipped)
+      throws IOException, InterruptedException, ExecutionException {
+    StringBuilder untarCommand = new StringBuilder();
+    if (gzipped) {
+      untarCommand.append("gzip -dc | (");
+    }
+    untarCommand.append("cd '");
+    untarCommand.append(FileUtil.makeShellPath(untarDir));
+    untarCommand.append("' ; ");
+    untarCommand.append("tar -x ");
+
+    if (gzipped) {
+      untarCommand.append(")");
+    }
+    int exitcode = runCommandOnStream(inFile, untarCommand.toString());
+    if (exitcode != 0) {
+      throw new IOException("Error untarring file " + inFile +
+          ". Tar process exited with exit code " + exitcode);
     }
   }
 
@@ -877,38 +886,6 @@ public class FileUtil {
       }
     } finally {
       IOUtils.cleanupWithLogger(LOG, tis, inputStream);
-    }
-  }
-
-  private static void unZipUsingJava(InputStream inputStream, File toDir)
-      throws IOException {
-    try (ZipInputStream zip = new ZipInputStream(inputStream)) {
-      int numOfFailedLastModifiedSet = 0;
-      do {
-        final ZipEntry entry = zip.getNextEntry();
-        if (entry == null) {
-          break;
-        }
-        if (!entry.isDirectory()) {
-          File file = new File(toDir, entry.getName());
-          File parent = file.getParentFile();
-          if (!parent.mkdirs() &&
-              !parent.isDirectory()) {
-            throw new IOException("Mkdirs failed to create " +
-                parent.getAbsolutePath());
-          }
-          try (OutputStream out = new FileOutputStream(file)) {
-            IOUtils.copyBytes(zip, out, BUFFER_SIZE);
-          }
-          if (!file.setLastModified(entry.getTime())) {
-            numOfFailedLastModifiedSet++;
-          }
-        }
-      } while (true);
-      if (numOfFailedLastModifiedSet > 0) {
-        LOG.warn("Could not set last modfied time for {} file(s)",
-            numOfFailedLastModifiedSet);
-      }
     }
   }
 

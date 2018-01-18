@@ -93,7 +93,6 @@ import org.junit.runners.Parameterized;
 /**
  * Unit test for the FSDownload class.
  */
-@RunWith(Parameterized.class)
 public class TestFSDownload {
 
   private static Boolean[] parameters = {false, true};
@@ -104,16 +103,6 @@ public class TestFSDownload {
     TAR, JAR, ZIP, TGZ
   };
   private Configuration conf = new Configuration();
-
-  @Parameterized.Parameters(name = "{0}")
-  public static Collection<Object[]> getParameters() {
-    return Arrays.stream(parameters).map(
-        type -> new Object[]{type}).collect(Collectors.toList());
-  }
-
-  public TestFSDownload(boolean useCommand) {
-    conf.setBoolean(YarnConfiguration.NM_DOWNLOADER_USE_OS_COMMAND, useCommand);
-  }
 
   @AfterClass
   public static void deleteTestDir() throws IOException {
@@ -582,15 +571,6 @@ public class TestFSDownload {
 
   @Rule
   public ExpectedException thrown = ExpectedException.none();
-
-  @Test (timeout=10000)
-  public void testDownloadArchiveFewThreads()
-      throws IOException, URISyntaxException,
-      InterruptedException {
-    conf.setInt(YarnConfiguration.NM_DOWNLOADER_THREAD_COUNT, 1);
-    thrown.expect(IOException.class);
-    downloadWithFileType(TEST_FILE_TYPE.TAR);
-  }
 
   /*
    * To test fix for YARN-3029
