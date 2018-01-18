@@ -596,11 +596,9 @@ public class FileUtil {
       throws IOException {
     try (ZipInputStream zip = new ZipInputStream(inputStream)) {
       int numOfFailedLastModifiedSet = 0;
-      do {
-        final ZipEntry entry = zip.getNextEntry();
-        if (entry == null) {
-          break;
-        }
+      for(ZipEntry entry = zip.getNextEntry();
+          entry != null;
+          entry = zip.getNextEntry()) {
         if (!entry.isDirectory()) {
           File file = new File(toDir, entry.getName());
           File parent = file.getParentFile();
@@ -616,7 +614,7 @@ public class FileUtil {
             numOfFailedLastModifiedSet++;
           }
         }
-      } while (true);
+      }
       if (numOfFailedLastModifiedSet > 0) {
         LOG.warn("Could not set last modfied time for {} file(s)",
             numOfFailedLastModifiedSet);
@@ -796,7 +794,7 @@ public class FileUtil {
     }
   }
 
-  private static void unTarUsingTar(InputStream inFile, File untarDir,
+  private static void unTarUsingTar(InputStream inputStream, File untarDir,
                                     boolean gzipped)
       throws IOException, InterruptedException, ExecutionException {
     StringBuilder untarCommand = new StringBuilder();
@@ -805,15 +803,15 @@ public class FileUtil {
     }
     untarCommand.append("cd '");
     untarCommand.append(FileUtil.makeShellPath(untarDir));
-    untarCommand.append("' ; ");
+    untarCommand.append("' && ");
     untarCommand.append("tar -x ");
 
     if (gzipped) {
       untarCommand.append(")");
     }
-    int exitcode = runCommandOnStream(inFile, untarCommand.toString());
+    int exitcode = runCommandOnStream(inputStream, untarCommand.toString());
     if (exitcode != 0) {
-      throw new IOException("Error untarring file " + inFile +
+      throw new IOException("Error untarring file " + inputStream +
           ". Tar process exited with exit code " + exitcode);
     }
   }
@@ -828,7 +826,7 @@ public class FileUtil {
     }
     untarCommand.append("cd '");
     untarCommand.append(FileUtil.makeShellPath(untarDir));
-    untarCommand.append("' ; ");
+    untarCommand.append("' && ");
     untarCommand.append("tar -xf ");
 
     if (gzipped) {
