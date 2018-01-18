@@ -43,6 +43,7 @@ import org.apache.hadoop.yarn.util.Records;
 @Public
 @Stable
 public abstract class LocalResource {
+
   @Public
   @Stable
   public static LocalResource newInstance(URL url, LocalResourceType type,

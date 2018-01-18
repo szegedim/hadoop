@@ -57,7 +57,6 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.nativeio.NativeIO;
-import org.apache.hadoop.util.RunJar;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.Shell.ShellCommandExecutor;
 import org.apache.hadoop.util.StringUtils;
@@ -587,7 +586,7 @@ public class FileUtil {
   }
 
   /**
-   * Given a File input it will unzip the file in a the unzip directory.
+   * Given a stream input it will unzip the it in the unzip directory.
    * passed as the second parameter
    * @param inputStream The zip file as input
    * @param toDir The unzip directory where to unzip the zip file.
@@ -626,11 +625,11 @@ public class FileUtil {
   }
 
   /**
-   * Given a File input it will unzip the file in a the unzip directory
+   * Given a File input it will unzip it in the unzip directory.
    * passed as the second parameter
    * @param inFile The zip file as input
    * @param unzipDir The unzip directory where to unzip the zip file.
-   * @throws IOException
+   * @throws IOException An I/O exception has occurred
    */
   public static void unZip(File inFile, File unzipDir) throws IOException {
     Enumeration<? extends ZipEntry> entries;
@@ -684,7 +683,7 @@ public class FileUtil {
       throws IOException, InterruptedException, ExecutionException {
     String shell = Shell.WINDOWS ? "cmd" : "bash";
     String cmdSwitch = Shell.WINDOWS ? "/c" : "-c";
-    ExecutorService executor = Executors.newFixedThreadPool(2);
+    ExecutorService executor = null;
     ProcessBuilder builder = new ProcessBuilder();
     builder.command(shell, cmdSwitch, command);
     Process process = builder.start();
@@ -693,6 +692,7 @@ public class FileUtil {
     String result =
         String.format("%nEnable debug logs on %s for details", LOG.getName());
     if (LOG.isDebugEnabled()) {
+      executor = Executors.newFixedThreadPool(2);
       output = executor.submit(() -> {
         // Read until the output stream receives an EOF and closed.
         try {
@@ -725,6 +725,9 @@ public class FileUtil {
     if (output != null) {
       result = error.get() + "\n" + output.get();
       LOG.debug(result);
+    }
+    if (executor != null) {
+      executor.shutdown();
     }
     return process.waitFor();
   }
