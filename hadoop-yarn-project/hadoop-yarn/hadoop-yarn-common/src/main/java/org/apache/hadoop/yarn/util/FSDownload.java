@@ -280,11 +280,7 @@ public class FSDownload implements Callable<Path> {
       }
     }
 
-    try {
-      downloadAndUnpack(sCopy, destination);
-    } catch (RuntimeException ex) {
-      throw new YarnException("Parallel download failed", ex);
-    }
+    downloadAndUnpack(sCopy, destination);
   }
 
   /**
@@ -292,7 +288,8 @@ public class FSDownload implements Callable<Path> {
    * @param source source path to copy. Typically HDFS
    * @param destination destination path. Typically local filesystem
    */
-  private void downloadAndUnpack(Path source, Path destination) {
+  private void downloadAndUnpack(Path source, Path destination)
+      throws YarnException{
     try {
       FileSystem sourceFileSystem = source.getFileSystem(conf);
       FileSystem destinationFileSystem = destination.getFileSystem(conf);
@@ -305,7 +302,7 @@ public class FSDownload implements Callable<Path> {
         unpack(source, destination, sourceFileSystem, destinationFileSystem);
       }
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      throw new YarnException("Download and unpack failed", e);
     }
   }
 
