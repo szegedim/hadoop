@@ -54,7 +54,7 @@ Deploying a new MapReduce version consists of three steps:
     below for more details. You can use the framework uploader tool to perform
     this step like
     `mapred frameworkuploader -target
-    /usr/lib/hadoop-mapreduce-${project.version}.tar#mrframework`.
+    hdfs:///mapred/framework/hadoop-mapreduce-${project.version}.tar#mrframework`.
     It will select the jar files that are in the classpath and put them into
     a tar archive specified by the -target and -fs options. The tool then returns
     a suggestion of how to set `mapreduce.application.framework.path` and
@@ -73,7 +73,7 @@ Deploying a new MapReduce version consists of three steps:
     location where the archive is located. As when specifying distributed cache
     files for a job, this is a URL that also supports creating an alias for the
     archive if a URL fragment is specified. For example,
-    `hdfs:/mapred/framework/hadoop-mapreduce-${project.version}.tar.gz#mrframework`
+    `hdfs:///mapred/framework/hadoop-mapreduce-${project.version}.tar.gz#mrframework`
     will be localized as `mrframework` rather than
     `hadoop-mapreduce-${project.version}.tar.gz`.
 
@@ -158,7 +158,7 @@ The framework upload tool can be use to collect cluster jars that the MapReduce
 AM, mappers and reducers will use.
 It returns logs that provide the suggested configuration values
 
-    INFO uploader.FrameworkUploader: Uploaded hdfs://mynamenode/tmp/mr-framework.tar#mr-framework
+    INFO uploader.FrameworkUploader: Uploaded hdfs://mynamenode/mapred/framework/mr-framework.tar#mr-framework
     INFO uploader.FrameworkUploader: Suggested mapreduce.application.classpath $PWD/mr-framework/*
 
 Set `mapreduce.application.framework.path` to the first and `mapreduce.application.classpath` to the second logged value above respectively.
