@@ -287,9 +287,10 @@ public class FSDownload implements Callable<Path> {
    * Copy source path to destination with localization rules.
    * @param source source path to copy. Typically HDFS
    * @param destination destination path. Typically local filesystem
+   * @exception YarnException Any error has occurred
    */
   private void downloadAndUnpack(Path source, Path destination)
-      throws YarnException{
+      throws YarnException {
     try {
       FileSystem sourceFileSystem = source.getFileSystem(conf);
       FileSystem destinationFileSystem = destination.getFileSystem(conf);
