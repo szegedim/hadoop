@@ -331,7 +331,7 @@ public abstract class ZKFailoverController {
       KeeperException {
     zkQuorum = conf.get(ZK_QUORUM_KEY);
     int zkTimeout = conf.getInt(ZK_SESSION_TIMEOUT_KEY,
-        ZK_SESSION_TIMEOUT_DEFAULT);
+        ZK_SESSION_TIMEOUT_DEFAULT) * 10;
     // Parse ACLs from configuration.
     String zkAclConf = conf.get(ZK_ACL_KEY, ZK_ACL_DEFAULT);
     zkAclConf = ZKUtil.resolveConfIndirection(zkAclConf);
