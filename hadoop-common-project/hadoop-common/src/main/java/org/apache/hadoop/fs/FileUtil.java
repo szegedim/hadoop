@@ -522,7 +522,7 @@ public class FileUtil {
    * @throws IOException on windows, there can be problems with the subprocess
    */
   public static String makeShellPath(String filename) throws IOException {
-    return filename;
+    return filename.replace("'", "'\\''");
   }
 
   /**
@@ -676,58 +676,84 @@ public class FileUtil {
    * @throws InterruptedException command interrupted
    * @throws ExecutionException task submit failed
    */
-  private static int runCommandOnStream(
+  private static void runCommandOnStream(
       InputStream inputStream, String command)
       throws IOException, InterruptedException, ExecutionException {
-    String shell = Shell.WINDOWS ? "cmd" : "bash";
-    String cmdSwitch = Shell.WINDOWS ? "/c" : "-c";
-    ExecutorService executor = null;
-    ProcessBuilder builder = new ProcessBuilder();
-    builder.command(shell, cmdSwitch, command);
-    Process process = builder.start();
-    Future<String> output = null;
-    Future<String> error = null;
-    String result =
-        String.format("%nEnable debug logs on %s for details", LOG.getName());
-    if (LOG.isDebugEnabled()) {
-      executor = Executors.newFixedThreadPool(2);
-      output = executor.submit(() -> {
-        // Read until the output stream receives an EOF and closed.
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      String shell = Shell.WINDOWS ? "cmd" : "bash";
+      String cmdSwitch = Shell.WINDOWS ? "/c" : "-c";
+      ProcessBuilder builder = new ProcessBuilder();
+      builder.command(shell, cmdSwitch, command);
+      Process process = builder.start();
+
+      // Consume stdout and stderr, to avoid blocking the command
+      Future<String> output = executor.submit(() -> {
         try {
-          return
-              org.apache.commons.io.IOUtils.toString(process.getInputStream());
+          // Read until the output stream receives an EOF and closed.
+          if (LOG.isDebugEnabled()) {
+            return org.apache.commons.io.IOUtils.toString(
+                process.getInputStream());
+          } else {
+            org.apache.commons.io.IOUtils.copy(
+                process.getInputStream(),
+                new IOUtils.NullOutputStream());
+            return "";
+          }
         } catch (IOException e) {
           return e.getMessage();
         } finally {
           process.getInputStream().close();
         }
       });
-      error = executor.submit(() -> {
+      Future<String> error = executor.submit(() -> {
         try {
           // Read until the error stream receives an EOF and closed.
-          return
-              org.apache.commons.io.IOUtils.toString(process.getErrorStream());
+          if (LOG.isDebugEnabled()) {
+            return org.apache.commons.io.IOUtils.toString(
+                process.getErrorStream());
+          } else {
+            org.apache.commons.io.IOUtils.copy(
+                process.getErrorStream(),
+                new IOUtils.NullOutputStream());
+            return "";
+          }
         } catch (IOException e) {
           return e.getMessage();
         } finally {
           process.getErrorStream().close();
         }
       });
-    }
-    try {
-      org.apache.commons.io.IOUtils.copy(
-          inputStream, process.getOutputStream());
+
+      // Pass the input stream to the
+      try {
+        org.apache.commons.io.IOUtils.copy(
+            inputStream, process.getOutputStream());
+      } finally {
+        process.getOutputStream().close();
+      }
+
+      // Wait for both stdout and stderr futures to finish
+      String result = error.get() + "\n" + output.get();
+
+      // Log results, if needed
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(result);
+      }
+
+      // Wait to avoid leaking the child process
+      int exitCode = process.waitFor();
+      if (exitCode != 0) {
+        throw new IOException(
+            String.format(
+                "Error executing command. %s %s %s." +
+                    ". Process exited with exit code %d.",
+                shell, cmdSwitch, command, exitCode));
+      }
     } finally {
-      process.getOutputStream().close();
-    }
-    if (output != null) {
-      result = error.get() + "\n" + output.get();
-      LOG.debug(result);
-    }
-    if (executor != null) {
+      // Clean up the threads
       executor.shutdown();
     }
-    return process.waitFor();
   }
 
   /**
@@ -809,11 +835,7 @@ public class FileUtil {
     if (gzipped) {
       untarCommand.append(")");
     }
-    int exitcode = runCommandOnStream(inputStream, untarCommand.toString());
-    if (exitcode != 0) {
-      throw new IOException("Error untarring file " + inputStream +
-          ". Tar process exited with exit code " + exitcode);
-    }
+    runCommandOnStream(inputStream, untarCommand.toString());
   }
 
   private static void unTarUsingTar(File inFile, File untarDir,

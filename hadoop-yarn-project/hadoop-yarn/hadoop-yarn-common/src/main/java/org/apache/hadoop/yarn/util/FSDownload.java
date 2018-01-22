@@ -309,6 +309,8 @@ public class FSDownload implements Callable<Path> {
 
   /**
    * Do the localization action on the input stream.
+   * We use the deprecated method RunJar.unJarAndSave for compatibility reasons.
+   * We should use the more efficient RunJar.unJar in the future.
    * @param source Source path
    * @param destination Destination pth
    * @param sourceFileSystem Source filesystem
@@ -317,6 +319,7 @@ public class FSDownload implements Callable<Path> {
    * @throws InterruptedException Operation interrupted by caller
    * @throws ExecutionException Could not create thread pool execution
    */
+  @SuppressWarnings("deprecation")
   private void unpack(Path source, Path destination,
                       FileSystem sourceFileSystem,
                       FileSystem destinationFileSystem)
