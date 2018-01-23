@@ -100,9 +100,9 @@ public class ResourceHandlerModule {
     return cGroupsHandler;
   }
 
-  public static OutboundBandwidthResourceHandler
+  public static NetworkPacketTaggingHandlerImpl
       getNetworkResourceHandler() {
-    return trafficControlBandwidthHandler;
+    return networkPacketTaggingHandlerImpl;
   }
 
   public static DiskResourceHandler
@@ -118,11 +118,6 @@ public class ResourceHandlerModule {
   public static CpuResourceHandler
       getCpuResourceHandler() {
     return cGroupsCpuResourceHandler;
-  }
-
-  public static NetworkPacketTaggingHandlerImpl
-  getNetworkResourceHandler() {
-    return networkPacketTaggingHandlerImpl;
   }
 
   private static CGroupsCpuResourceHandlerImpl initCGroupsCpuResourceHandler(
