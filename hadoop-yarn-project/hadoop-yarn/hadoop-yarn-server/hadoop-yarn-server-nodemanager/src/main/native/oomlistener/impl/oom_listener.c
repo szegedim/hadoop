@@ -24,7 +24,7 @@
  Print an error and exit
 */
 static void print_error(const char *file, const char *message,
-                 ...) {
+                        ...) {
   fprintf(stderr, "%s ", file);
   va_list arguments;
   va_start(arguments, message);
@@ -33,90 +33,93 @@ static void print_error(const char *file, const char *message,
 }
 
 
-int oom_listener(_descriptors* descriptors, const char* cgroup) {
-    if ((descriptors->event_fd = eventfd(0, 0)) == -1) {
-        print_error(descriptors->command, "eventfd() failed. errno:%d %s\n",
-                    errno, strerror(errno));
-        return EXIT_FAILURE;
-    }
+int oom_listener(_descriptors *descriptors, const char *cgroup, int fd) {
+  if ((descriptors->event_fd = eventfd(0, 0)) == -1) {
+    print_error(descriptors->command, "eventfd() failed. errno:%d %s\n",
+                errno, strerror(errno));
+    return EXIT_FAILURE;
+  }
 
-    if (snprintf(descriptors->event_control_path,
-                 sizeof(descriptors->event_control_path), "%s/%s", cgroup,
-                 "cgroup.event_control") < 0) {
-        print_error(descriptors->command, "path too long %s\n", cgroup);
-        return EXIT_FAILURE;
-    }
+  if (snprintf(descriptors->event_control_path,
+               sizeof(descriptors->event_control_path), "%s/%s", cgroup,
+               "cgroup.event_control") < 0) {
+    print_error(descriptors->command, "path too long %s\n", cgroup);
+    return EXIT_FAILURE;
+  }
 
-    if ((descriptors->event_control_fd = open(
-            descriptors->event_control_path,
-            O_WRONLY)) == -1) {
-        print_error(descriptors->command, "Could not open %s. errno:%d %s\n",
-                    descriptors->event_control_path,
-                    errno, strerror(errno));
-        return EXIT_FAILURE;
-    }
+  if ((descriptors->event_control_fd = open(
+      descriptors->event_control_path,
+      O_WRONLY)) == -1) {
+    print_error(descriptors->command, "Could not open %s. errno:%d %s\n",
+                descriptors->event_control_path,
+                errno, strerror(errno));
+    return EXIT_FAILURE;
+  }
 
-    if (snprintf(descriptors->oom_control_path,
-                 sizeof(descriptors->oom_control_path),
-                 "%s/%s", cgroup, "memory.oom_control") < 0) {
-        print_error(descriptors->command, "path too long %s\n", cgroup);
-        return EXIT_FAILURE;
-    }
+  if (snprintf(descriptors->oom_control_path,
+               sizeof(descriptors->oom_control_path),
+               "%s/%s", cgroup, "memory.oom_control") < 0) {
+    print_error(descriptors->command, "path too long %s\n", cgroup);
+    return EXIT_FAILURE;
+  }
 
-    if ((descriptors->oom_control_fd = open(
-            descriptors->oom_control_path,
-            O_RDONLY)) == -1) {
-        print_error(descriptors->command, "Could not open %s. errno:%d %s\n",
-                    descriptors->oom_control_path,
-                    errno, strerror(errno));
-        return EXIT_FAILURE;
-    }
+  if ((descriptors->oom_control_fd = open(
+      descriptors->oom_control_path,
+      O_RDONLY)) == -1) {
+    print_error(descriptors->command, "Could not open %s. errno:%d %s\n",
+                descriptors->oom_control_path,
+                errno, strerror(errno));
+    return EXIT_FAILURE;
+  }
 
-    if ((descriptors->oom_command_len = (size_t) snprintf(
+  if ((descriptors->oom_command_len = (size_t) snprintf(
+      descriptors->oom_command,
+      sizeof(descriptors->oom_command),
+      "%d %d",
+      descriptors->event_fd,
+      descriptors->oom_control_fd)) < 0) {
+    print_error(descriptors->command, "Could print %d %d\n",
+                descriptors->event_control_fd,
+                descriptors->oom_control_fd);
+    return EXIT_FAILURE;
+  }
+
+  if (write(descriptors->event_control_fd,
             descriptors->oom_command,
-            sizeof(descriptors->oom_command),
-            "%d %d",
-            descriptors->event_fd,
-            descriptors->oom_control_fd)) < 0) {
-        print_error(descriptors->command, "Could print %d %d\n",
-                    descriptors->event_control_fd,
-                    descriptors->oom_control_fd);
-        return EXIT_FAILURE;
+            descriptors->oom_command_len) == -1) {
+  }
+
+  if (close(descriptors->event_control_fd) == -1) {
+    print_error(descriptors->command, "Could not close %s errno:%d\n",
+                descriptors->event_control_path, errno);
+    return EXIT_FAILURE;
+  }
+  descriptors->event_control_fd = -1;
+
+  for (;;) {
+    uint64_t u;
+    ssize_t ret = 0;
+    struct stat stat_buffer = {0};
+
+    if ((ret = read(descriptors->event_fd, &u, sizeof(u))) != sizeof(u)) {
+      print_error(descriptors->command,
+                  "Could not read from eventfd %d errno:%d %s\n", ret,
+                  errno, strerror(errno));
+      return EXIT_FAILURE;
     }
 
-    if (write(descriptors->event_control_fd,
-              descriptors->oom_command,
-              descriptors->oom_command_len) == -1) {
+    if ((ret = write(fd, &u, sizeof(u))) != sizeof(u)) {
+      print_error(descriptors->command,
+                  "Could not write to pipe %d errno:%d %s\n", ret,
+                  errno, strerror(errno));
+      return EXIT_FAILURE;
     }
 
-    if (close(descriptors->event_control_fd) == -1) {
-        print_error(descriptors->command, "Could not close %s errno:%d\n",
-                    descriptors->event_control_path, errno);
-        return EXIT_FAILURE;
+    if (stat(cgroup, &stat_buffer) != 0) {
+      break;
     }
-    descriptors->event_control_fd = -1;
-
-    for (;;) {
-        uint64_t u;
-        ssize_t ret = 0;
-        struct stat stat_buffer = {0};
-
-        if ((ret = read(descriptors->event_fd, &u, sizeof(u))) != sizeof(u)) {
-            print_error(descriptors->command,
-                        "Could not read from eventfd %d errno:%d %s\n", ret,
-                        errno, strerror(errno));
-            return EXIT_FAILURE;
-        }
-
-        printf("oom %ld\n", u);
-        if (stat(cgroup, &stat_buffer) != 0) {
-            print_error(descriptors->command,
-                        "Path deteled: %s errno:%d %s\n", cgroup,
-                        errno, strerror(errno));
-            return EXIT_FAILURE;
-        }
-    }
-    return EXIT_SUCCESS;
+  }
+  return EXIT_SUCCESS;
 }
 
 #endif

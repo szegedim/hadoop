@@ -24,8 +24,8 @@
 #include "oom_listener.h"
 
 void print_usage(void) {
-    fprintf(stderr, "usage: oomlistener <cgroup directory>\n");
-    exit(EXIT_FAILURE);
+  fprintf(stderr, "usage: oomlistener <cgroup directory>\n");
+  exit(EXIT_FAILURE);
 }
 
 /*
@@ -37,25 +37,25 @@ void print_usage(void) {
  oomlistener <cgroup>
 */
 int main(int argc, char *argv[]) {
-    if (argc != 2)
-        print_usage();
+  if (argc != 2)
+    print_usage();
 
-    _descriptors descriptors = {
-            .command = argv[0],
-            .event_fd = -1,
-            .event_control_fd = -1,
-            .oom_control_fd = -1,
-            .event_control_path = {0},
-            .oom_control_path = {0},
-            .oom_command = {0},
-            .oom_command_len = 0
-    };
+  _descriptors descriptors = {
+      .command = argv[0],
+      .event_fd = -1,
+      .event_control_fd = -1,
+      .oom_control_fd = -1,
+      .event_control_path = {0},
+      .oom_control_path = {0},
+      .oom_command = {0},
+      .oom_command_len = 0
+  };
 
-    int ret = oom_listener(&descriptors, argv[1]);
+  int ret = oom_listener(&descriptors, argv[1], STDOUT_FILENO);
 
-    cleanup(&descriptors);
+  cleanup(&descriptors);
 
-    return ret;
+  return ret;
 }
 
 #else

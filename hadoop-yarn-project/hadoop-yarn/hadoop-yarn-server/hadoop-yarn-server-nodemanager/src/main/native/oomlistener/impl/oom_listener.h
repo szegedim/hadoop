@@ -17,6 +17,7 @@
  */
 
 #if __linux
+
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
@@ -35,31 +36,34 @@ This file implements a standard cgroups out of memory listener.
 */
 
 typedef struct _descriptors {
-    const char* command;
-    int event_fd;
-    int event_control_fd;
-    int oom_control_fd;
-    char event_control_path[PATH_MAX];
-    char oom_control_path[PATH_MAX];
-    char oom_command[25];
-    size_t oom_command_len;
+  const char *command;
+  int event_fd;
+  int event_control_fd;
+  int oom_control_fd;
+  char event_control_path[PATH_MAX];
+  char oom_control_path[PATH_MAX];
+  char oom_command[25];
+  size_t oom_command_len;
 } _descriptors;
 
 /*
  Clean up allocated resources in a descriptor structure
 */
-inline void cleanup(_descriptors* descriptors) {
-    close(descriptors->event_fd);
-    descriptors->event_fd = -1;
-    close(descriptors->event_control_fd);
-    descriptors->event_control_fd = -1;
-    close(descriptors->oom_control_fd);
-    descriptors->oom_control_fd = -1;
+inline void cleanup(_descriptors *descriptors) {
+  close(descriptors->event_fd);
+  descriptors->event_fd = -1;
+  close(descriptors->event_control_fd);
+  descriptors->event_control_fd = -1;
+  close(descriptors->oom_control_fd);
+  descriptors->oom_control_fd = -1;
 }
 
 /*
  * Enable an OOM listener on the memory cgroup cgroup
+ * descriptors: Structure that holds state for testing purposes
+ * cgroup: cgroup path to watch. It has to be a memory cgroup
+ * fd: File to forward events to. Normally this is stdout
  */
-int oom_listener(_descriptors* descriptors, const char* cgroup);
+int oom_listener(_descriptors *descriptors, const char *cgroup, int fd);
 
 #endif
