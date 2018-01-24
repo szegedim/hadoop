@@ -20,12 +20,14 @@ package org.apache.hadoop.fs;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.URI;
@@ -522,7 +524,7 @@ public class FileUtil {
    * @throws IOException on windows, there can be problems with the subprocess
    */
   public static String makeShellPath(String filename) throws IOException {
-    return filename.replace("'", "'\\''");
+    return filename;
   }
 
   /**
@@ -533,6 +535,22 @@ public class FileUtil {
    */
   public static String makeShellPath(File file) throws IOException {
     return makeShellPath(file, false);
+  }
+
+  /**
+   * Convert a os-native filename to a path that works for the shell
+   * and avoids script injection attacks.
+   * @param file The filename to convert
+   * @return The unix pathname
+   * @throws IOException on windows, there can be problems with the subprocess
+   */
+  public static String makeSecureShellPath(File file) throws IOException {
+    if (Shell.WINDOWS) {
+      // Currently it is never called, but it might be helpful in the future.
+      throw new UnsupportedOperationException("Not implemented for Windows");
+    } else {
+      return makeShellPath(file, false).replace("'", "'\\''");
+    }
   }
 
   /**
@@ -671,7 +689,6 @@ public class FileUtil {
    * Run a command and send the contents of an input stream to it.
    * @param inputStream Input stream to forward to the shell command
    * @param command shell command to run
-   * @return the exit code
    * @throws IOException read or write failed
    * @throws InterruptedException command interrupted
    * @throws ExecutionException task submit failed
@@ -679,53 +696,62 @@ public class FileUtil {
   private static void runCommandOnStream(
       InputStream inputStream, String command)
       throws IOException, InterruptedException, ExecutionException {
-    ExecutorService executor = Executors.newFixedThreadPool(2);
+    ExecutorService executor = null;
+    ProcessBuilder builder = new ProcessBuilder();
+    builder.command(
+        Shell.WINDOWS ? "cmd" : "bash",
+        Shell.WINDOWS ? "/c" : "-c",
+        command);
+    Process process = builder.start();
     try {
-      String shell = Shell.WINDOWS ? "cmd" : "bash";
-      String cmdSwitch = Shell.WINDOWS ? "/c" : "-c";
-      ProcessBuilder builder = new ProcessBuilder();
-      builder.command(shell, cmdSwitch, command);
-      Process process = builder.start();
-
       // Consume stdout and stderr, to avoid blocking the command
-      Future<String> output = executor.submit(() -> {
+      executor = Executors.newFixedThreadPool(2);
+      Future output = executor.submit(() -> {
         try {
           // Read until the output stream receives an EOF and closed.
           if (LOG.isDebugEnabled()) {
-            return org.apache.commons.io.IOUtils.toString(
-                process.getInputStream());
+            // Log directly to avoid out of memory errors
+            try (BufferedReader reader =
+                     new BufferedReader(
+                         new InputStreamReader(process.getInputStream()))) {
+              String line;
+              while((line = reader.readLine()) != null) {
+                LOG.debug(line);
+              }
+            }
           } else {
             org.apache.commons.io.IOUtils.copy(
                 process.getInputStream(),
                 new IOUtils.NullOutputStream());
-            return "";
           }
         } catch (IOException e) {
-          return e.getMessage();
-        } finally {
-          process.getInputStream().close();
+          LOG.debug(e.getMessage());
         }
       });
-      Future<String> error = executor.submit(() -> {
+      Future error = executor.submit(() -> {
         try {
           // Read until the error stream receives an EOF and closed.
           if (LOG.isDebugEnabled()) {
-            return org.apache.commons.io.IOUtils.toString(
-                process.getErrorStream());
+            // Log directly to avoid out of memory errors
+            try (BufferedReader reader =
+                     new BufferedReader(
+                         new InputStreamReader(process.getErrorStream()))) {
+              String line;
+              while((line = reader.readLine()) != null) {
+                LOG.debug(line);
+              }
+            }
           } else {
             org.apache.commons.io.IOUtils.copy(
                 process.getErrorStream(),
                 new IOUtils.NullOutputStream());
-            return "";
           }
         } catch (IOException e) {
-          return e.getMessage();
-        } finally {
-          process.getErrorStream().close();
+          LOG.debug(e.getMessage());
         }
       });
 
-      // Pass the input stream to the
+      // Pass the input stream to the command to process
       try {
         org.apache.commons.io.IOUtils.copy(
             inputStream, process.getOutputStream());
@@ -734,25 +760,23 @@ public class FileUtil {
       }
 
       // Wait for both stdout and stderr futures to finish
-      String result = error.get() + "\n" + output.get();
-
-      // Log results, if needed
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(result);
-      }
-
-      // Wait to avoid leaking the child process
-      int exitCode = process.waitFor();
-      if (exitCode != 0) {
-        throw new IOException(
-            String.format(
-                "Error executing command. %s %s %s." +
-                    ". Process exited with exit code %d.",
-                shell, cmdSwitch, command, exitCode));
-      }
+      error.get();
+      output.get();
     } finally {
       // Clean up the threads
-      executor.shutdown();
+      if (executor != null) {
+        executor.shutdown();
+      }
+    }
+
+    // Wait to avoid leaking the child process
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      throw new IOException(
+          String.format(
+              "Error executing command. %s " +
+                  "Process exited with exit code %d.",
+              command, exitCode));
     }
   }
 
@@ -828,7 +852,7 @@ public class FileUtil {
       untarCommand.append("gzip -dc | (");
     }
     untarCommand.append("cd '");
-    untarCommand.append(FileUtil.makeShellPath(untarDir));
+    untarCommand.append(FileUtil.makeSecureShellPath(untarDir));
     untarCommand.append("' && ");
     untarCommand.append("tar -x ");
 
@@ -843,18 +867,18 @@ public class FileUtil {
     StringBuffer untarCommand = new StringBuffer();
     if (gzipped) {
       untarCommand.append(" gzip -dc '");
-      untarCommand.append(FileUtil.makeShellPath(inFile));
+      untarCommand.append(FileUtil.makeSecureShellPath(inFile));
       untarCommand.append("' | (");
     }
     untarCommand.append("cd '");
-    untarCommand.append(FileUtil.makeShellPath(untarDir));
+    untarCommand.append(FileUtil.makeSecureShellPath(untarDir));
     untarCommand.append("' && ");
     untarCommand.append("tar -xf ");
 
     if (gzipped) {
       untarCommand.append(" -)");
     } else {
-      untarCommand.append(FileUtil.makeShellPath(inFile));
+      untarCommand.append(FileUtil.makeSecureShellPath(inFile));
     }
     String[] shellCmd = { "bash", "-c", untarCommand.toString() };
     ShellCommandExecutor shexec = new ShellCommandExecutor(shellCmd);
