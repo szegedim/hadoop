@@ -32,6 +32,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
 import java.nio.file.AccessDeniedException;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -713,7 +714,8 @@ public class FileUtil {
             // Log directly to avoid out of memory errors
             try (BufferedReader reader =
                      new BufferedReader(
-                         new InputStreamReader(process.getInputStream()))) {
+                         new InputStreamReader(process.getInputStream(),
+                             Charset.forName("UTF-8")))) {
               String line;
               while((line = reader.readLine()) != null) {
                 LOG.debug(line);
@@ -735,7 +737,8 @@ public class FileUtil {
             // Log directly to avoid out of memory errors
             try (BufferedReader reader =
                      new BufferedReader(
-                         new InputStreamReader(process.getErrorStream()))) {
+                         new InputStreamReader(process.getErrorStream(),
+                             Charset.forName("UTF-8")))) {
               String line;
               while((line = reader.readLine()) != null) {
                 LOG.debug(line);
