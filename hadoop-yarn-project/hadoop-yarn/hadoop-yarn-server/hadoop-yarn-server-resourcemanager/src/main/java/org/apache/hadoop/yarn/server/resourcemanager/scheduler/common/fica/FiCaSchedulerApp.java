@@ -1015,7 +1015,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
         Resource effCap = ((AbstractCSQueue) getQueue())
             .getEffectiveCapacity(getAppAMNodePartitionName());
         float queueUsagePerc = calc.divide(totalPartitionRes,
-            report.getUsedResources(), effCap) * 100;
+            report.getGuaranteedResourcesUsed(), effCap) * 100;
         report.setQueueUsagePercentage(queueUsagePerc);
       }
       return report;
