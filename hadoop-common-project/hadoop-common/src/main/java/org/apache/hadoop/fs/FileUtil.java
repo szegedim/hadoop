@@ -704,6 +704,7 @@ public class FileUtil {
         Shell.WINDOWS ? "/c" : "-c",
         command);
     Process process = builder.start();
+    int exitCode;
     try {
       // Consume stdout and stderr, to avoid blocking the command
       executor = Executors.newFixedThreadPool(2);
@@ -770,10 +771,10 @@ public class FileUtil {
       if (executor != null) {
         executor.shutdown();
       }
+      // Wait to avoid leaking the child process
+      exitCode = process.waitFor();
     }
 
-    // Wait to avoid leaking the child process
-    int exitCode = process.waitFor();
     if (exitCode != 0) {
       throw new IOException(
           String.format(
