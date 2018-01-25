@@ -35,21 +35,49 @@
 This file implements a standard cgroups out of memory listener.
 */
 
-typedef struct _descriptors {
+typedef struct _oom_listener_descriptors {
+  /*
+   * Command line that was called to run this process.
+   */
   const char *command;
+  /*
+   * Event descriptor to watch.
+   * It is filled in by the function,
+   * if not specified, yet.
+   */
   int event_fd;
+  /*
+   * cgroup.event_control file handle
+   */
   int event_control_fd;
+  /*
+   * memory.oom_control file handle
+   */
   int oom_control_fd;
+  /*
+   * cgroup.event_control path
+   */
   char event_control_path[PATH_MAX];
+  /*
+   * memory.oom_control path
+   */
   char oom_control_path[PATH_MAX];
+  /*
+   * Control command to write to
+   * cgroup.event_control
+   * Filled by the function.
+   */
   char oom_command[25];
+  /*
+   * Length of oom_command filled by the function.
+   */
   size_t oom_command_len;
-} _descriptors;
+} _oom_listener_descriptors;
 
 /*
  Clean up allocated resources in a descriptor structure
 */
-inline void cleanup(_descriptors *descriptors) {
+inline void cleanup(_oom_listener_descriptors *descriptors) {
   close(descriptors->event_fd);
   descriptors->event_fd = -1;
   close(descriptors->event_control_fd);
@@ -64,6 +92,6 @@ inline void cleanup(_descriptors *descriptors) {
  * cgroup: cgroup path to watch. It has to be a memory cgroup
  * fd: File to forward events to. Normally this is stdout
  */
-int oom_listener(_descriptors *descriptors, const char *cgroup, int fd);
+int oom_listener(_oom_listener_descriptors *descriptors, const char *cgroup, int fd);
 
 #endif

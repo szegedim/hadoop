@@ -27,6 +27,7 @@ extern "C" {
 #include <mutex>
 
 #define CGROUP_ROOT "/sys/fs/cgroup/memory/"
+#define TEST_ROOT "/tmp/test-oom-listener"
 #define CGROUP_TASKS "tasks"
 #define CGROUP_OOM_CONTROL "memory.oom_control"
 #define CGROUP_LIMIT_PHYSICAL "memory.limit_in_bytes"
@@ -48,28 +49,37 @@ public:
   virtual std::mutex& getLock() { return lock; }
   virtual const char* GetCGroup() { return cgroup; }
   virtual void SetUp() {
+    const char *cgroup0[] = { CGROUP_ROOT, TEST_ROOT };
     struct stat cgroup_memory = {};
-    if(0 != stat(CGROUP_ROOT, &cgroup_memory)) {
-      printf(CGROUP_ROOT " missing. Skipping test");
-      return;
+    for (int i = 0; i < GTEST_ARRAY_SIZE_(cgroup); ++i) {
+      mkdir(cgroup0[i], 0700);
+
+      if (0 != stat(cgroup0[i], &cgroup_memory)) {
+        printf("%s missing. Skipping test", cgroup0[i]);
+        continue;
+      }
+
+      timespec timespec1 = {};
+      if (0 != clock_gettime(CLOCK_MONOTONIC, &timespec1)) {
+        ASSERT_TRUE(false) << " clock_gettime failed";
+      }
+
+      if (snprintf(cgroup, sizeof(cgroup), "%s/%lx/",
+                        cgroup0[i], timespec1.tv_nsec) <= 0) {
+        cgroup[0] = '\0';
+        printf("%s snprintf failed", cgroup0[i]);
+        continue;
+      }
+
+      if (0 != mkdir(cgroup, 0700)) {
+        printf("%s not writable.", cgroup);
+        continue;
+      }
+      break;
     }
 
-    timespec timespec1 = {};
-    if (0 != clock_gettime(CLOCK_MONOTONIC, &timespec1)) {
-      printf(CGROUP_ROOT " clock_gettime failed");
-      return;
-    }
-
-    if (0 >= snprintf(cgroup, sizeof(cgroup), CGROUP_ROOT "%lx/", timespec1.tv_nsec)) {
-      cgroup[0] = '\0';
-      printf(CGROUP_ROOT " snprintf failed");
-      return;
-    }
-
-    if (0 != mkdir(cgroup, 0700)) {
-      printf(CGROUP_ROOT " not writable.");
-      return;
-    }
+    ASSERT_EQ(0, stat(cgroup, &cgroup_memory))
+                  << "Cannot use or simulate cgroup " << cgroup;
   }
   virtual void TearDown() {
     if (cgroup[0] != '\0') {
@@ -146,8 +156,18 @@ TEST_F(OOMListenerTest, test_oom) {
     __pid_t listener = fork();
     if (listener == 0) {
       // child listener forwarding cgroup events
-      _descriptors descriptors = {};
+      _oom_listener_descriptors descriptors = {
+          .command = "test",
+          .event_fd = -1,
+          .event_control_fd = -1,
+          .oom_control_fd = -1,
+          .event_control_path = {0},
+          .oom_control_path = {0},
+          .oom_command = {0},
+          .oom_command_len = 0
+      };
       int ret = oom_listener(&descriptors, GetCGroup(), test_pipe[1]);
+      cleanup(&descriptors);
       close(test_pipe[0]);
       close(test_pipe[1]);
       exit(ret);

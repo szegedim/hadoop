@@ -24,7 +24,7 @@
 #include "oom_listener.h"
 
 void print_usage(void) {
-  fprintf(stderr, "usage: oomlistener <cgroup directory>\n");
+  fprintf(stderr, "usage: oom-listener <cgroup directory>\n");
   exit(EXIT_FAILURE);
 }
 
@@ -34,13 +34,13 @@ void print_usage(void) {
  It will print a new line on every out of memory event
  to the standard output.
  usage:
- oomlistener <cgroup>
+ oom-listener <cgroup>
 */
 int main(int argc, char *argv[]) {
   if (argc != 2)
     print_usage();
 
-  _descriptors descriptors = {
+  _oom_listener_descriptors descriptors = {
       .command = argv[0],
       .event_fd = -1,
       .event_control_fd = -1,

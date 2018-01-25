@@ -21,7 +21,7 @@
 #include "oom_listener.h"
 
 /*
- Print an error and exit
+ * Print an error.
 */
 static void print_error(const char *file, const char *message,
                         ...) {
@@ -32,14 +32,22 @@ static void print_error(const char *file, const char *message,
   va_end(arguments);
 }
 
-
-int oom_listener(_descriptors *descriptors, const char *cgroup, int fd) {
-  if ((descriptors->event_fd = eventfd(0, 0)) == -1) {
+/*
+ * Listen to OOM events in a memory cgroup. See declaration for details.
+ */
+int oom_listener(_oom_listener_descriptors *descriptors, const char *cgroup, int fd) {
+  /* Create an event handle, if we do not have one already*/
+  if (descriptors->event_fd == -1 &&
+      (descriptors->event_fd = eventfd(0, 0)) == -1) {
     print_error(descriptors->command, "eventfd() failed. errno:%d %s\n",
                 errno, strerror(errno));
     return EXIT_FAILURE;
   }
 
+  /* open the file to listen (memory.oom_control)
+   * and write the event handle and the file handle
+   * to group.event control to listen to changes
+   */
   if (snprintf(descriptors->event_control_path,
                sizeof(descriptors->event_control_path), "%s/%s", cgroup,
                "cgroup.event_control") < 0) {
@@ -96,11 +104,15 @@ int oom_listener(_descriptors *descriptors, const char *cgroup, int fd) {
   }
   descriptors->event_control_fd = -1;
 
+  /*
+   * Listen to events until the cgroup is deleted.
+   */
   for (;;) {
     uint64_t u;
     ssize_t ret = 0;
     struct stat stat_buffer = {0};
 
+    /* Event counter values are always 8 bytes */
     if ((ret = read(descriptors->event_fd, &u, sizeof(u))) != sizeof(u)) {
       print_error(descriptors->command,
                   "Could not read from eventfd %d errno:%d %s\n", ret,
@@ -108,6 +120,7 @@ int oom_listener(_descriptors *descriptors, const char *cgroup, int fd) {
       return EXIT_FAILURE;
     }
 
+    /* Forward the value to the caller, typically stdout */
     if ((ret = write(fd, &u, sizeof(u))) != sizeof(u)) {
       print_error(descriptors->command,
                   "Could not write to pipe %d errno:%d %s\n", ret,
@@ -115,6 +128,7 @@ int oom_listener(_descriptors *descriptors, const char *cgroup, int fd) {
       return EXIT_FAILURE;
     }
 
+    /* Quit, if the cgroup is deleted */
     if (stat(cgroup, &stat_buffer) != 0) {
       break;
     }

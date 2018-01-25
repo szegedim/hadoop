@@ -88,7 +88,7 @@ include_directories(
     ${GTEST_SRC_DIR}/include
     main/native/container-executor
     main/native/container-executor/impl
-    main/native/oomlistener/impl
+    main/native/oom-listener/impl
 )
 # add gtest as system library to suppress gcc warnings
 include_directories(SYSTEM ${GTEST_SRC_DIR}/include)
@@ -133,18 +133,18 @@ add_executable(cetest
 target_link_libraries(cetest gtest)
 output_directory(cetest test)
 
-add_executable(oomlistener
-        main/native/oomlistener/impl/oom_listener.c
-        main/native/oomlistener/impl/oom_listener.h
-        main/native/oomlistener/impl/oom_listener_main.c
+add_executable(oom-listener
+        main/native/oom-listener/impl/oom_listener.c
+        main/native/oom-listener/impl/oom_listener.h
+        main/native/oom-listener/impl/oom_listener_main.c
 )
-output_directory(oomlistener target/usr/local/bin)
+output_directory(oom-listener target/usr/local/bin)
 
-add_executable(test-oomlistener
-        main/native/oomlistener/impl/oom_listener.c
-        main/native/oomlistener/impl/oom_listener.h
-        main/native/oomlistener/test/oom_listener_test_main.cc
+add_executable(test-oom-listener
+        main/native/oom-listener/impl/oom_listener.c
+        main/native/oom-listener/impl/oom_listener.h
+        main/native/oom-listener/test/oom_listener_test_main.cc
 )
-target_link_libraries(test-oomlistener gtest)
-output_directory(test-oomlistener test)
+target_link_libraries(test-oom-listener gtest)
+output_directory(test-oom-listener test)
 
