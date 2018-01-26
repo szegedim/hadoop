@@ -131,8 +131,8 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
         new CpuTimeTracker(this.jiffyLengthMs);
     this.clock = clock;
     this.processTotalJiffies = BigInteger.ZERO;
-    this.processPhysicalMemory = 0L;
-    this.processVirtualMemory = 0L;
+    this.processPhysicalMemory = UNAVAILABLE;
+    this.processVirtualMemory = UNAVAILABLE;
   }
 
   @Override
