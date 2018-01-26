@@ -48,7 +48,8 @@ int main(int argc, char *argv[]) {
       .event_control_path = {0},
       .oom_control_path = {0},
       .oom_command = {0},
-      .oom_command_len = 0
+      .oom_command_len = 0,
+      .watch_timout = 1000
   };
 
   int ret = oom_listener(&descriptors, argv[1], STDOUT_FILENO);

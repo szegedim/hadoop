@@ -72,6 +72,10 @@ typedef struct _oom_listener_descriptors {
    * Length of oom_command filled by the function.
    */
   size_t oom_command_len;
+  /*
+   * Directory watch timeout
+   */
+  int watch_timout;
 } _oom_listener_descriptors;
 
 /*
@@ -84,6 +88,7 @@ inline void cleanup(_oom_listener_descriptors *descriptors) {
   descriptors->event_control_fd = -1;
   close(descriptors->oom_control_fd);
   descriptors->oom_control_fd = -1;
+  descriptors->watch_timout = 1000;
 }
 
 /*

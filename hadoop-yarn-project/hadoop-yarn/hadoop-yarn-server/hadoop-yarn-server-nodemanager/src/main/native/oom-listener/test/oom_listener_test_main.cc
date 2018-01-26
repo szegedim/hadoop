@@ -27,11 +27,20 @@ extern "C" {
 #include <mutex>
 
 #define CGROUP_ROOT "/sys/fs/cgroup/memory/"
-#define TEST_ROOT "/tmp/test-oom-listener"
+#define TEST_ROOT "/tmp/test-oom-listener/"
 #define CGROUP_TASKS "tasks"
 #define CGROUP_OOM_CONTROL "memory.oom_control"
 #define CGROUP_LIMIT_PHYSICAL "memory.limit_in_bytes"
 #define CGROUP_LIMIT_SWAP "memory.memsw.limit_in_bytes"
+#define CGROUP_EVENT_CONTROL "cgroup.event_control"
+#define CGROUP_LIMIT (5 * 1024 * 1024)
+
+// We try multiple cgroup directories
+// We try first the official path to test
+// in production
+// If we are running as a user we fall back
+// to mock cgroup
+static const char *cgroup_candidates[] = { CGROUP_ROOT, TEST_ROOT };
 
 int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
@@ -41,38 +50,37 @@ int main(int argc, char **argv) {
 class OOMListenerTest : public ::testing::Test {
 private:
   char cgroup[PATH_MAX] = {};
-  std::mutex lock;
+  const char* cgroup_root = nullptr;
 public:
   OOMListenerTest() = default;
 
   virtual ~OOMListenerTest() = default;
-  virtual std::mutex& getLock() { return lock; }
   virtual const char* GetCGroup() { return cgroup; }
   virtual void SetUp() {
-    const char *cgroup0[] = { CGROUP_ROOT, TEST_ROOT };
     struct stat cgroup_memory = {};
     for (int i = 0; i < GTEST_ARRAY_SIZE_(cgroup); ++i) {
-      mkdir(cgroup0[i], 0700);
+      cgroup_root = cgroup_candidates[i];
+      mkdir(cgroup_root, 0700);
 
-      if (0 != stat(cgroup0[i], &cgroup_memory)) {
-        printf("%s missing. Skipping test", cgroup0[i]);
+      if (0 != stat(cgroup_root, &cgroup_memory)) {
+        printf("%s missing. Skipping test\n", cgroup_root);
         continue;
       }
 
       timespec timespec1 = {};
       if (0 != clock_gettime(CLOCK_MONOTONIC, &timespec1)) {
-        ASSERT_TRUE(false) << " clock_gettime failed";
+        ASSERT_TRUE(false) << " clock_gettime failed\n";
       }
 
-      if (snprintf(cgroup, sizeof(cgroup), "%s/%lx/",
-                        cgroup0[i], timespec1.tv_nsec) <= 0) {
+      if (snprintf(cgroup, sizeof(cgroup), "%s%lx/",
+                        cgroup_root, timespec1.tv_nsec) <= 0) {
         cgroup[0] = '\0';
-        printf("%s snprintf failed", cgroup0[i]);
+        printf("%s snprintf failed\n", cgroup_root);
         continue;
       }
 
       if (0 != mkdir(cgroup, 0700)) {
-        printf("%s not writable.", cgroup);
+        printf("%s not writable.\n", cgroup);
         continue;
       }
       break;
@@ -85,56 +93,88 @@ public:
     if (cgroup[0] != '\0') {
       rmdir(cgroup);
     }
+    if (cgroup_root != nullptr &&
+        cgroup_root != cgroup_candidates[0]) {
+      rmdir(cgroup_root);
+    }
   }
 };
 
 TEST_F(OOMListenerTest, test_oom) {
   // Disable OOM killer
   std::ofstream oom_control;
-  std::string oom_control_file = std::string(GetCGroup()).append(CGROUP_OOM_CONTROL);
+  std::string oom_control_file =
+      std::string(GetCGroup()).append(CGROUP_OOM_CONTROL);
   oom_control.open(oom_control_file.c_str(), oom_control.out);
   oom_control << 1 << std::endl;
   oom_control.close();
 
-  // Set a low enough limit
+  // Set a low enough limit for physical
   std::ofstream limit;
-  std::string limit_file = std::string(GetCGroup()).append(CGROUP_LIMIT_PHYSICAL);
+  std::string limit_file =
+      std::string(GetCGroup()).append(CGROUP_LIMIT_PHYSICAL);
   limit.open(limit_file.c_str(), limit.out);
-  limit << 5 * 1024 * 1024 << std::endl;
+  limit << CGROUP_LIMIT << std::endl;
   limit.close();
 
   // Set a low enough limit for physical + swap
   std::ofstream limitSwap;
-  std::string limit_swap_file = std::string(GetCGroup()).append(CGROUP_LIMIT_SWAP);
+  std::string limit_swap_file =
+      std::string(GetCGroup()).append(CGROUP_LIMIT_SWAP);
   limitSwap.open(limit_swap_file.c_str(), limitSwap.out);
-  limitSwap << 5 * 1024 * 1024 << std::endl;
+  limitSwap << CGROUP_LIMIT << std::endl;
   limitSwap.close();
 
-  std::string tasks_file = std::string(GetCGroup()).append(CGROUP_TASKS);
+  // Event control file to set
+  std::string memory_control_file =
+      std::string(GetCGroup()).append(CGROUP_EVENT_CONTROL);
 
-  getLock().lock();
+  // Tasks file to check
+  std::string tasks_file =
+      std::string(GetCGroup()).append(CGROUP_TASKS);
+
+  int mock_oom_event_as_user = -1;
+  struct stat stat1 = {};
+  if (0 != stat(memory_control_file.c_str(), &stat1)) {
+    // We cannot tamper with cgroups
+    // running as a user, so simulate an
+    // oom event
+    mock_oom_event_as_user = eventfd(0, 0);
+  }
+  const int simulate_cgroups =
+      mock_oom_event_as_user != -1;
+
   __pid_t mem_hog_pid = fork();
   if (!mem_hog_pid) {
     // Child process to consume too much memory
-
-    // Wait until we are added to the cgroup
-    __pid_t cgroupPid;
-    do {
-      std::ifstream tasks;
-      tasks.open(tasks_file.c_str(), tasks.in);
-      tasks >> cgroupPid;
-      tasks.close();
-    } while (cgroupPid != getpid());
-
-    const int bufferSize = 1024 * 1024;
-    for(;;) {
-
-      auto buffer = (char*)malloc(bufferSize);
-      if (buffer == nullptr) {
-        break;
+    if (simulate_cgroups) {
+      std::cout << "Simulating cgroups OOM" << std::endl;
+      for (;;) {
+        sleep(1);
       }
-      for (int i = 0; i < bufferSize; ++i) {
-        buffer[i] = (char)std::rand();
+    } else {
+      // Wait until we are added to the cgroup
+      // so that it is accounted for our mem
+      // usage
+      __pid_t cgroupPid;
+      do {
+        std::ifstream tasks;
+        tasks.open(tasks_file.c_str(), tasks.in);
+        tasks >> cgroupPid;
+        tasks.close();
+      } while (cgroupPid != getpid());
+
+      // Start consuming as much memory as we can.
+      // cgroup will stop us at CGROUP_LIMIT
+      const int bufferSize = 1024 * 1024;
+      std::cout << "Consuming too much memory" << std::endl;
+      for (;;) {
+        auto buffer = (char *) malloc(bufferSize);
+        if (buffer != nullptr) {
+          for (int i = 0; i < bufferSize; ++i) {
+            buffer[i] = (char) std::rand();
+          }
+        }
       }
     }
   } else {
@@ -147,24 +187,24 @@ TEST_F(OOMListenerTest, test_oom) {
     tasks << mem_hog_pid << std::endl;
     tasks.close();
 
-    // Release child
-    getLock().unlock();
-
+    // Create pipe to get forwarded eventfd
     int test_pipe[2];
     ASSERT_EQ(0, pipe(test_pipe));
 
+    // Launch OOM listener
     __pid_t listener = fork();
     if (listener == 0) {
       // child listener forwarding cgroup events
       _oom_listener_descriptors descriptors = {
           .command = "test",
-          .event_fd = -1,
+          .event_fd = mock_oom_event_as_user,
           .event_control_fd = -1,
           .oom_control_fd = -1,
           .event_control_path = {0},
           .oom_control_path = {0},
           .oom_command = {0},
-          .oom_command_len = 0
+          .oom_command_len = 0,
+          .watch_timout = 100
       };
       int ret = oom_listener(&descriptors, GetCGroup(), test_pipe[1]);
       cleanup(&descriptors);
@@ -172,8 +212,20 @@ TEST_F(OOMListenerTest, test_oom) {
       close(test_pipe[1]);
       exit(ret);
     } else {
-      uint64_t event_id;
-      ASSERT_EQ(sizeof(event_id), read(test_pipe[0], &event_id, sizeof(event_id)))
+      uint64_t event_id = 1;
+      if (simulate_cgroups) {
+        // We cannot tamper with cgroups
+        // running as a user, so simulate an
+        // oom event
+        ASSERT_EQ(sizeof(event_id),
+                  write(mock_oom_event_as_user,
+                        &event_id,
+                        sizeof(event_id)));
+      }
+      ASSERT_EQ(sizeof(event_id),
+                read(test_pipe[0],
+                     &event_id,
+                     sizeof(event_id)))
                     << "The event has not arrived";
       close(test_pipe[0]);
       close(test_pipe[1]);
@@ -189,6 +241,13 @@ TEST_F(OOMListenerTest, test_oom) {
       ASSERT_EQ(nullptr, mem_hog_status)
                     << "Test process killed with invalid status";
 
+      if (mock_oom_event_as_user != -1) {
+        ASSERT_EQ(0, unlink(oom_control_file.c_str()));
+        ASSERT_EQ(0, unlink(limit_file.c_str()));
+        ASSERT_EQ(0, unlink(limit_swap_file.c_str()));
+        ASSERT_EQ(0, unlink(tasks_file.c_str()));
+        ASSERT_EQ(0, unlink(memory_control_file.c_str()));
+      }
       // Once the cgroup is empty delete it
       ASSERT_EQ(0, rmdir(GetCGroup()))
                 << "Could not delete cgroup " << GetCGroup();
