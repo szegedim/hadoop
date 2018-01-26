@@ -185,7 +185,12 @@ public class CGroupsResourceCalculator extends ResourceCalculatorProcessTree {
       LOG.warn("Failed to parse " + pid, e);
     }
     processPhysicalMemory = getMemorySize(memStat);
-    processVirtualMemory = getMemorySize(memswStat);
+    if (memswStat.exists()) {
+      processVirtualMemory = getMemorySize(memswStat);
+    } else if(LOG.isDebugEnabled()) {
+      LOG.debug("Swap cgroups monitoring is not compiled into the kernel " +
+          memswStat.getAbsolutePath().toString());
+    }
   }
 
   @Override
