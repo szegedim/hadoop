@@ -416,8 +416,10 @@ public class FSDownload implements Callable<Path> {
           }
         });
       }
-      changePermissions(dFinal.getFileSystem(conf), dFinal);
-      changePermissions(destinationTmp.getFileSystem(conf), destinationTmp);
+      Path destinationTmpfilesQualified = files.makeQualified(destinationTmp);
+      changePermissions(
+          destinationTmpfilesQualified.getFileSystem(conf),
+          destinationTmpfilesQualified);
       files.rename(destinationTmp, destDirPath, Rename.OVERWRITE);
 
       if (LOG.isDebugEnabled()) {
