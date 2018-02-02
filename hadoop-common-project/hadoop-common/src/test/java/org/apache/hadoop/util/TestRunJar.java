@@ -24,8 +24,12 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Random;
+import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -33,6 +37,7 @@ import java.util.zip.ZipEntry;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -112,6 +117,59 @@ public class TestRunJar {
                 new File(unjarDir, TestRunJar.FOOBAR_TXT).exists());
     assertTrue("foobaz unpacked",
                new File(unjarDir, FOOBAZ_TXT).exists());
+  }
+
+  private File generateBigJar(File dir) throws Exception {
+    File file = new File(dir, "job.jar");
+    try(JarOutputStream stream = new JarOutputStream(
+        new FileOutputStream(file))) {
+      Random r = new Random(100);
+      for (int i = 0; i < 10; ++i) {
+        JarEntry entry = new JarEntry("f" + Integer.toString(i));
+        stream.putNextEntry(entry);
+        for (int j=0; j < 756; ++j) {
+          stream.write(r.nextInt() & 0xFF);
+        }
+        stream.closeEntry();
+      }
+      stream.close();
+    }
+    return file;
+  }
+
+  /**
+   * Test unjarring a big file. This checks appending the remainder of the file
+   * to the tee output stream in RunJar.unJarAndSave.
+   */
+  @Test
+  public void testBigJar() throws Exception {
+    File dir = new File(TEST_ROOT_DIR, "testUnJarWithPattern2");
+    Assert.assertTrue(dir.mkdirs());
+    File input = generateBigJar(dir);
+    File output = new File(dir, "job2.jar");
+    try {
+      try (InputStream is = new FileInputStream(input)) {
+        RunJar.unJarAndSave(is, dir, "job2.jar", Pattern.compile(".*"));
+      }
+      Assert.assertEquals(input.length(), output.length());
+      File[] list = dir.listFiles();
+      if (list != null) {
+        for (File f : list) {
+          if (f.getName().startsWith("f")) {
+            Assert.assertEquals(756, f.length());
+          }
+        }
+      }
+    } finally {
+      // Clean up
+      File[] list = dir.listFiles();
+      if (list != null) {
+        for (File f : list) {
+          f.delete();
+        }
+      }
+      dir.delete();
+    }
   }
 
   @Test
