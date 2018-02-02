@@ -134,7 +134,7 @@ public class RunJar {
       }
       // ZipInputStream does not need the end of the file. Let's read it out.
       // This helps with an additional TeeInputStream on the input.
-      IOUtils.copyBytes(inputStream, new NullOutputStream(), 8_192);
+      IOUtils.copyBytes(inputStream, new NullOutputStream(), BUFFER_SIZE);
     }
   }
 

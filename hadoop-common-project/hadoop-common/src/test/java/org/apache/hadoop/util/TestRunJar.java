@@ -34,7 +34,11 @@ import java.util.jar.JarOutputStream;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -125,7 +129,8 @@ public class TestRunJar {
         new FileOutputStream(file))) {
       Random r = new Random(100);
       for (int i = 0; i < 10; ++i) {
-        JarEntry entry = new JarEntry("f" + Integer.toString(i));
+        JarEntry entry = new JarEntry(
+            ((i % 2 == 0) ? "dir/" : "") + "f" + Integer.toString(i));
         stream.putNextEntry(entry);
         for (int j=0; j < 756; ++j) {
           stream.write(r.nextInt() & 0xFF);
@@ -141,9 +146,11 @@ public class TestRunJar {
    * Test unjarring a big file. This checks appending the remainder of the file
    * to the tee output stream in RunJar.unJarAndSave.
    */
+  @SuppressWarnings("deprecation")
   @Test
   public void testBigJar() throws Exception {
-    File dir = new File(TEST_ROOT_DIR, "testUnJarWithPattern2");
+    Random r = new Random(System.currentTimeMillis());
+    File dir = new File(TEST_ROOT_DIR, Long.toHexString(r.nextLong()));
     Assert.assertTrue(dir.mkdirs());
     File input = generateBigJar(dir);
     File output = new File(dir, "job2.jar");
@@ -152,23 +159,15 @@ public class TestRunJar {
         RunJar.unJarAndSave(is, dir, "job2.jar", Pattern.compile(".*"));
       }
       Assert.assertEquals(input.length(), output.length());
-      File[] list = dir.listFiles();
-      if (list != null) {
-        for (File f : list) {
-          if (f.getName().startsWith("f")) {
-            Assert.assertEquals(756, f.length());
-          }
-        }
+      for (int i = 0; i < 10; ++i) {
+        File subdir = new File(dir, ((i % 2 == 0) ? "dir/" : ""));
+        File f = new File(subdir, "f" + Integer.toString(i));
+        Assert.assertEquals(756, f.length());
       }
     } finally {
       // Clean up
-      File[] list = dir.listFiles();
-      if (list != null) {
-        for (File f : list) {
-          f.delete();
-        }
-      }
-      dir.delete();
+      FileSystem fs = LocalFileSystem.getLocal(new Configuration());
+      fs.delete(new Path(dir.getAbsolutePath()), true);
     }
   }
 
