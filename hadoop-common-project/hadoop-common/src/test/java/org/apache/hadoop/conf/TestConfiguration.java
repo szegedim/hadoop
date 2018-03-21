@@ -2423,14 +2423,14 @@ public class TestConfiguration {
 
   /**
    * Test race conditions between clone() and getProps().
-   * There is a race condition in the way Hadoop handles the Configuration
+   * Test for race conditions in the way Hadoop handles the Configuration
    * class. The scenario is the following. Let's assume that there are two
    * threads sharing the same Configuration class. One adds some resources
    * to the configuration, while the other one clones it. Resources are
    * loaded lazily in a deferred call to loadResources(). If the cloning
    * happens after adding the resources but before parsing them, some temporary
    * resources like input stream pointers are cloned. Eventually both copies
-   * will load the input stream resources pointing to the same input streams.
+   * will load the same input stream resources.
    * One parses the input stream XML and closes it updating it's own copy of
    * the resource. The other one has another pointer to the same input stream.
    * When it tries to load it, it will crash with a stream closed exception.
