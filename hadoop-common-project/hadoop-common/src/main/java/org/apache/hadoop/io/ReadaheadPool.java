@@ -206,8 +206,8 @@ public class ReadaheadPool {
       // other FD, which may be wasted work, but won't cause a problem.
       try {
         if (fd.valid()) {
-          NativeIO.POSIX.getCacheManipulator().posixFadviseIfPossible(identifier,
-              fd, off, len, POSIX_FADV_WILLNEED);
+          NativeIO.POSIX.getCacheManipulator().posixFadviseIfPossible(
+              identifier, fd, off, len, POSIX_FADV_WILLNEED);
         }
       } catch (IOException ioe) {
         if (canceled) {

@@ -25,6 +25,9 @@ import java.io.RandomAccessFile;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Unit test for FadvisedChunkedFile.
+ */
 public class TestFadvisedChunkedFile {
 
   @Test
