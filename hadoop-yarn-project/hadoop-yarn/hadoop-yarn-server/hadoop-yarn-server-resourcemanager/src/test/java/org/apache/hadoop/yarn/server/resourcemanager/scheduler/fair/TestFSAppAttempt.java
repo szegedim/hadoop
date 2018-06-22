@@ -25,6 +25,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.server.resourcemanager.MockNodes;
 import org.apache.hadoop.yarn.server.resourcemanager.MockRM;
+import static org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FairSchedulerConfiguration.SIZE_BASED_WEIGHT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -58,6 +59,7 @@ public class TestFSAppAttempt extends FairSchedulerTestBase {
   @Before
   public void setup() {
     Configuration conf = createConfiguration();
+    conf.setBoolean(SIZE_BASED_WEIGHT, true);
     resourceManager = new MockRM(conf);
     resourceManager.start();
     scheduler = (FairScheduler) resourceManager.getResourceScheduler();
@@ -350,5 +352,31 @@ public class TestFSAppAttempt extends FairSchedulerTestBase {
     Resource headroom = schedulerApp.getHeadroom();
     assertEquals(expectedMemory, headroom.getMemorySize());
     assertEquals(expectedCPU, headroom.getVirtualCores());
+  }
+
+  @Test
+  public void testWeight() {
+    FSLeafQueue queue = Mockito.mock(FSLeafQueue.class);
+    ApplicationAttemptId applicationAttemptId = createAppAttemptId(1, 1);
+    RMContext rmContext = resourceManager.getRMContext();
+    FSAppAttempt schedulerApp =
+        new FSAppAttempt(scheduler, applicationAttemptId, "user1", queue,
+            null, rmContext);
+
+    Resource requestedResource = Resource.newInstance(1024, 2);
+    schedulerApp.getAppAttemptResourceUsage().setUsed(requestedResource);
+    schedulerApp.updateDemand();
+    assertEquals(10, schedulerApp.getWeight(), 0.1);
+    assertEquals(10, schedulerApp.getWeight(), 0.1);
+
+    Resource requestedResource2 = Resource.newInstance(2048, 2);
+    schedulerApp.getAppAttemptResourceUsage().setUsed(requestedResource2);
+    schedulerApp.updateDemand();
+    assertEquals(11, schedulerApp.getWeight(), 0.1);
+    assertEquals(11, schedulerApp.getWeight(), 0.1);
+
+    schedulerApp.getPriority().setPriority(2);
+    assertEquals(22, schedulerApp.getWeight(), 0.1);
+    assertEquals(22, schedulerApp.getWeight(), 0.1);
   }
 }

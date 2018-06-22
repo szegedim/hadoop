@@ -111,6 +111,10 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
   private final Map<SchedulerRequestKey, NodeType> allowedLocalityLevel =
       new HashMap<>();
 
+  private float weight = 0;
+  private long weightMemory = -1;
+  private int weightPriority = -1;
+
   public FSAppAttempt(FairScheduler scheduler,
       ApplicationAttemptId applicationAttemptId, String user, FSLeafQueue queue,
       ActiveUsersManager activeUsersManager, RMContext rmContext) {
@@ -1325,14 +1329,27 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
 
   @Override
   public float getWeight() {
-    float weight = 1.0F;
+    // Spare some cpu time not recalculating the
+    // difficult stuff
+    boolean sizeBased = scheduler.isSizeBasedWeight();
+    while(true) {
+      long tmpMemory = demand.getMemorySize();
+      int tmpPriority = appPriority.getPriority();
+      if (weightMemory == tmpMemory &&
+          weightPriority == tmpPriority) {
+        break;
+      }
+      float tmpWeight = tmpPriority;
+      if (sizeBased) {
+        // Set weight based on current memory demand
+        tmpWeight *= (float) (Math.log1p(tmpMemory) / Math.log(2));
+      }
 
-    if (scheduler.isSizeBasedWeight()) {
-      // Set weight based on current memory demand
-      weight = (float)(Math.log1p(demand.getMemorySize()) / Math.log(2));
+      weight = tmpWeight;
+      weightMemory = tmpMemory;
+      weightPriority = tmpPriority;
     }
-
-    return weight * appPriority.getPriority();
+    return weight;
   }
 
   @Override
